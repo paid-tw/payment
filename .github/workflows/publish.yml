@@ -1,44 +1,36 @@
-name: Publish
+name: Publish Package
 
-# Tag a release with a plain `vX.Y.Z` tag (after `pnpm changeset version` +
-# commit, or when package.json versions already match the intended release)
-# and push it; this publishes every workspace package whose version
-# isn't already on the registry.
+# Push tag v* → publish workspace packages whose name@version is not yet on npm.
+# Uses npm OIDC trusted publishing (Trusted Publisher per package on npmjs.com).
 on:
   push:
     tags:
       - "v*"
 
 permissions:
-  id-token: write # Required for npm OIDC trusted publishing
+  id-token: write # Required for OIDC
   contents: read
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@v6
 
-      # No `version:` — pnpm/action-setup reads `packageManager` from package.json.
       - uses: pnpm/action-setup@v6
 
-      # Avoid registry-url → dummy NODE_AUTH_TOKEN (breaks OIDC).
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
-          cache: pnpm
+          registry-url: "https://registry.npmjs.org"
+          package-manager-cache: false # never use caching in release builds
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r build
       - run: pnpm test
 
-      # npm >= 11.5.1 (Node 24): tokenless OIDC + provenance.
-      # Each package needs Trusted Publisher: paid-tw/payment + publish.yml.
-      # pnpm pack rewrites workspace:* → real versions for the tarball.
-      - run: npm install -g npm@latest
-      - name: Publish changed packages (OIDC + provenance)
-        env:
-          NODE_AUTH_TOKEN: ""
+      # pnpm pack rewrites workspace:* → real versions; npm publish uses OIDC + provenance.
+      - name: Publish packages
         run: |
           for dir in packages/*/; do
             [ -f "${dir}package.json" ] || continue
