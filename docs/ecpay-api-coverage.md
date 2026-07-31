@@ -64,11 +64,11 @@ Legend: ✅ implemented · 🟡 partial · ❌ missing · 🔌 optional / rarely
 | --- | --- | --- | --- |
 | CheckMacValue sign/verify | — | all Aio | ✅ golden tests + stage live |
 | Query order | `Cashier/QueryTradeInfo/V5` | `QueryTrade.php` / `sample_order_search.py` | ✅ |
-| Credit DoAction refund (R) | `CreditDetail/DoAction` | `sample_credit_do_action.py` | ✅ Action=R only |
-| Credit DoAction capture/close (C) | same | Capture (AIO form style) | ❌ |
-| Credit DoAction cancel (E) / abandon (N) | same | docs p=2885 | ❌ |
+| Credit DoAction refund (R) | `CreditDetail/DoAction` | `sample_credit_do_action.py` | ✅ `refundPayment` |
+| Credit DoAction capture/close (C) | same | Capture (AIO form style) | ✅ `capturePayment` |
+| Credit DoAction cancel (E) / abandon (N) | same | docs p=2885 | ✅ `cancelClose` / `abandonPayment` |
 | Period order action | period APIs | `CreditCardPeriodAction` | ❌ |
-| Query credit single detail | credit detail API | `QueryCreditTrade` | ❌ |
+| Query credit single detail | credit detail API | `QueryCreditTrade` | ✅ `queryCreditTrade` (needs creditCheckCode; prod-oriented) |
 | Query period trade | | `QueryPeridicTrade` | ❌ |
 | Query ATM/CVS/BARCODE payment info | | `QueryPaymentInfo` | ❌ |
 | Download reconcile / disbursement CSV | | Download* samples | 🔌 |
@@ -142,8 +142,8 @@ Capabilities to add later:
 
 ### P1 — AIO credit lifecycle
 
-4. DoAction **C / E / N** (capture / cancel / abandon), not only R.  
-5. Query credit single detail (status machine for correct Action).  
+4. ~~DoAction **C / E / N**~~ — done (`creditDoAction` + capture/cancelClose/abandon).  
+5. ~~Query credit single detail~~ — done (`queryCreditTrade`).  
 
 ### P2 — 站內付 2.0 (ECPG)
 
