@@ -67,3 +67,20 @@ ECPAY_LIVE=1 ECPAY_QUERY_ID=yourMerTradeNo PAID_DEBUG=1 pnpm test:live:ecpay
 ```
 
 MSW 的 default handlers 會對已知 `MerchantTradeNo` 重放 field-exact fixtures（與 live 同一組 HashKey/HashIV），方便在無網路時重現 stage 行為。
+
+## 兩套 API 與覆蓋面
+
+綠界金流有兩條產品線，**不可混用同一套 wire format**：
+
+| 系列 | 文件 | 本套件 |
+| --- | --- | --- |
+| **全方位金流 (AIO)** | [developers.ecpay.com.tw/?p=2509](https://developers.ecpay.com.tw/?p=2509) | ✅ 部分：AioCheckOut 導轉、QueryTradeInfo、DoAction 退款(R) |
+| **站內付 2.0 (ECPG)** | [developers.ecpay.com.tw/?p=8972](https://developers.ecpay.com.tw/?p=8972) | ❌ 尚未實作（AES JSON Token / PayToken / 前端 JS） |
+
+官方範例對照：
+
+- AIO PHP：https://github.com/ECPay/SDK_PHP/tree/master/example/Payment/Aio  
+- ECPG PHP：https://github.com/ECPay/SDK_PHP/tree/master/example/Payment/Ecpg  
+- AIO Python：https://github.com/ECPay/ECPayAIO_Python  
+
+完整缺口表與 roadmap：[`docs/ecpay-api-coverage.md`](../../docs/ecpay-api-coverage.md)。

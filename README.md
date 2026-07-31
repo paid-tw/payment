@@ -64,6 +64,9 @@ pnpm test
 pnpm test:live:ecpay
 ```
 
+綠界有 **AIO 導轉** 與 **站內付 2.0 (ECPG)** 兩套 API；目前只覆蓋 AIO 核心路徑。  
+對照官方文件 / PHP / Python 範例的完整矩陣：[`docs/ecpay-api-coverage.md`](./docs/ecpay-api-coverage.md)。
+
 ## 邊界
 
 | 放這裡 | 不放這裡 |
