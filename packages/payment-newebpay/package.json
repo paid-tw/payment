@@ -1,0 +1,47 @@
+{
+  "name": "@paid-tw/payment-newebpay",
+  "version": "0.1.0",
+  "description": "NewebPay 藍新 adapter for @paid-tw/payment — scaffold (not yet implemented).",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paid-tw/payment.git",
+    "directory": "packages/payment-newebpay"
+  },
+  "homepage": "https://github.com/paid-tw/payment/tree/main/packages/payment-newebpay#readme",
+  "bugs": "https://github.com/paid-tw/payment/issues",
+  "type": "module",
+  "sideEffects": false,
+  "files": ["dist"],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@paid-tw/payment": "workspace:*"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.3",
+    "typescript": "^5.6.0"
+  },
+  "keywords": ["payment", "newebpay", "藍新", "taiwan", "金流"],
+  "publishConfig": {
+    "access": "public"
+  }
+}
