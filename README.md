@@ -79,6 +79,7 @@ AIO vs ECPG 區隔：[`docs/ecpay-provider-separation.md`](./docs/ecpay-provider
 
 - CI / tag publish：`.github/workflows/`
 - Changesets：`pnpm changeset`
+- 各套件變更紀錄：`packages/*/CHANGELOG.md`
 - npm OIDC trusted publishing 步驟：[`docs/release.md`](./docs/release.md)
 
 ```bash
