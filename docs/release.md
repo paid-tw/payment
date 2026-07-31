@@ -4,12 +4,12 @@ Mirror of the [`einvoice`](https://github.com/paid-tw/einvoice) release flow.
 
 ## Packages published
 
-| Package | npm |
-| --- | --- |
-| `@paid-tw/payment` | core |
-| `@paid-tw/payment-ecpay` | ECPay AIO + 站內付 2.0 |
-| `@paid-tw/payment-payuni` | PAYUNi |
-| `@paid-tw/payment-newebpay` | NewebPay (scaffold) |
+| Package                     | npm                    |
+| --------------------------- | ---------------------- |
+| `@paid-tw/payment`          | core                   |
+| `@paid-tw/payment-ecpay`    | ECPay AIO + 站內付 2.0 |
+| `@paid-tw/payment-payuni`   | PAYUNi                 |
+| `@paid-tw/payment-newebpay` | NewebPay (scaffold)    |
 
 ## One-time: npm Trusted Publisher (OIDC)
 
