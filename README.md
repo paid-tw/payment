@@ -75,22 +75,6 @@ pnpm test:live:ecpay
 覆蓋矩陣：[`docs/ecpay-api-coverage.md`](./docs/ecpay-api-coverage.md)。  
 AIO vs ECPG 區隔：[`docs/ecpay-provider-separation.md`](./docs/ecpay-provider-separation.md)。
 
-## 發布（gh tag + OIDC）
-
-**本機不跑 `npm publish`。** 推送 `vX.Y.Z` tag 後由 Actions 以 OIDC 發 npm。
-
-- Workflows：`.github/workflows/ci.yml`、`publish.yml`
-- Changesets：`pnpm changeset` / `pnpm changeset version`
-- 各套件 CHANGELOG：`packages/*/CHANGELOG.md`
-- 完整步驟：[`docs/release.md`](./docs/release.md)
-
-```bash
-pnpm changeset version
-git commit -am "chore: release"
-git push origin main
-git tag v0.1.1 && git push origin v0.1.1
-```
-
 ## 邊界
 
 | 放這裡                                                   | 不放這裡                                          |
