@@ -6,12 +6,12 @@
 
 ## 會發布的套件
 
-| Package | 角色 |
-| --- | --- |
-| `@paid-tw/payment` | core |
-| `@paid-tw/payment-ecpay` | ECPay AIO + 站內付 2.0 |
-| `@paid-tw/payment-payuni` | PAYUNi |
-| `@paid-tw/payment-newebpay` | NewebPay scaffold |
+| Package                     | 角色                   |
+| --------------------------- | ---------------------- |
+| `@paid-tw/payment`          | core                   |
+| `@paid-tw/payment-ecpay`    | ECPay AIO + 站內付 2.0 |
+| `@paid-tw/payment-payuni`   | PAYUNi                 |
+| `@paid-tw/payment-newebpay` | NewebPay scaffold      |
 
 各套件變更紀錄：`packages/*/CHANGELOG.md`。
 
@@ -19,12 +19,12 @@
 
 對**每一個**上表 package，在 npmjs.com → **Settings** → **Trusted Publisher** → **GitHub Actions**：
 
-| 欄位 | 值 |
-| --- | --- |
-| Organization | `paid-tw` |
-| Repository | `payment` |
+| 欄位              | 值            |
+| ----------------- | ------------- |
+| Organization      | `paid-tw`     |
+| Repository        | `payment`     |
 | Workflow filename | `publish.yml` |
-| Environment | （空白） |
+| Environment       | （空白）      |
 
 不需要長期 `NPM_TOKEN`。Workflow：`permissions.id-token: write` + `pnpm pack` + `npm publish --provenance`。
 
