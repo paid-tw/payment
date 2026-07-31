@@ -22,22 +22,23 @@ jobs:
       # No `version:` — pnpm/action-setup reads `packageManager` from package.json.
       - uses: pnpm/action-setup@v6
 
+      # Avoid registry-url → dummy NODE_AUTH_TOKEN (breaks OIDC).
       - uses: actions/setup-node@v6
         with:
           node-version: "24"
-          registry-url: "https://registry.npmjs.org"
+          cache: pnpm
 
       - run: pnpm install --frozen-lockfile
       - run: pnpm -r build
       - run: pnpm test
 
-      # npm >= 11.5.1 (on Node 24) does tokenless OIDC trusted publishing. We
-      # publish a `pnpm pack` tarball (which rewrites the `workspace:*` ranges to
-      # real versions) so npm handles auth + provenance and pnpm handles the
-      # workspace resolution. No NODE_AUTH_TOKEN: each package has a Trusted
-      # Publisher configured for this repo + workflow on npmjs.com.
+      # npm >= 11.5.1 (Node 24): tokenless OIDC + provenance.
+      # Each package needs Trusted Publisher: paid-tw/payment + publish.yml.
+      # pnpm pack rewrites workspace:* → real versions for the tarball.
       - run: npm install -g npm@latest
       - name: Publish changed packages (OIDC + provenance)
+        env:
+          NODE_AUTH_TOKEN: ""
         run: |
           for dir in packages/*/; do
             [ -f "${dir}package.json" ] || continue
