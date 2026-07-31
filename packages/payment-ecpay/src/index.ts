@@ -32,3 +32,17 @@ export type {
   EcpayNotifyInput,
   EcpayPaymentNotify,
 } from "./notify.js";
+
+// 站內付 2.0 (ECPG) — separate factory / name "ecpay-ecpg"
+export { createEcpayEcpgProvider } from "./ecpg/provider.js";
+export type {
+  EcpayEcpgProvider,
+  EcpgCreatePaymentInput,
+  EcpgCreatePaymentResult,
+  EcpgCreateWithPayTokenInput,
+  EcpgConsumerFields,
+  EcpgTokenResult,
+} from "./ecpg/provider.js";
+export { ECPG_ORIGINS, resolveEcpgOrigin } from "./ecpg/config.js";
+export type { EcpgProviderConfig } from "./ecpg/config.js";
+export { encryptData, decryptData, aesEncrypt, aesDecrypt } from "./ecpg/aes.js";

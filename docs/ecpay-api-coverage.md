@@ -83,12 +83,13 @@ Not exposed on `CreatePaymentRequest` today: `BindingCard`, `MerchantMemberID`, 
 
 ## ECPG (站內付 2.0) — coverage vs official samples
 
-**Status: entirely missing** from `@paid-tw/payment-ecpay`.
+**Status: core path landed** as `createEcpayEcpgProvider` (`name: "ecpay-ecpg"`).  
+See [ecpay-provider-separation.md](./ecpay-provider-separation.md).
 
 | Sample | Server API (stage host) | Status |
 | --- | --- | --- |
-| `Create*Order/GetToken.php` | `POST ecpg-stage…/Merchant/GetTokenbyTrade` | ❌ |
-| `CreateOrder.php` (after PayToken) | `POST ecpg-stage…/Merchant/CreatePayment` | ❌ |
+| `Create*Order/GetToken.php` | `POST ecpg-stage…/Merchant/GetTokenbyTrade` | ✅ `createPayment` → `mode: "token"` |
+| `CreateOrder.php` (after PayToken) | `POST ecpg-stage…/Merchant/CreatePayment` | ✅ `createPaymentWithPayToken` |
 | `CreateAllOrder` / Credit / ATM / CVS / Barcode / Installment / ApplePay / UnionPay | GetToken variants + WebJS | ❌ |
 | `CreatePaymentWithCardID.php` | pay with bound card | ❌ |
 | `CreateBindCard.php` / bind-card order / delete / query member cards | card-on-file | ❌ |
@@ -147,10 +148,10 @@ Capabilities to add later:
 
 ### P2 — 站內付 2.0 (ECPG)
 
-6. New package or `src/ecpg/*`: AES JSON client + `getTokenByTrade` + `createPaymentWithPayToken`.  
-7. MSW fixtures from stage + live tests (same public merchant 3002607 where ECPG is enabled).  
-8. Notify verify for AES callbacks.  
-9. README for required frontend JS steps (out of Node SDK).  
+6. ~~AES JSON + GetToken + CreatePayment~~ — done under `src/ecpg/*`, factory `createEcpayEcpgProvider`.  
+7. Live tests against ecpg-stage (when merchant has ECPG enabled) — open.  
+8. Notify verify for AES callbacks — open.  
+9. README frontend JS steps — partial (README + separation doc).  
 
 ### P3 — long tail
 

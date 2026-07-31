@@ -84,19 +84,40 @@ ECPAY_LIVE=1 ECPAY_QUERY_ID=yourMerTradeNo PAID_DEBUG=1 pnpm test:live:ecpay
 
 MSW 的 default handlers 會對已知 `MerchantTradeNo` 重放 field-exact fixtures（與 live 同一組 HashKey/HashIV），方便在無網路時重現 stage 行為。
 
-## 兩套 API 與覆蓋面
+## 兩套 API 與區隔方式
 
-綠界金流有兩條產品線，**不可混用同一套 wire format**：
+綠界金流有兩條產品線，**同一 npm 套件、兩個 factory、兩個 `name`**（詳見
+[`docs/ecpay-provider-separation.md`](../../docs/ecpay-provider-separation.md)）：
 
-| 系列 | 文件 | 本套件 |
-| --- | --- | --- |
-| **全方位金流 (AIO)** | [developers.ecpay.com.tw/?p=2509](https://developers.ecpay.com.tw/?p=2509) | ✅ 部分：AioCheckOut 導轉、QueryTradeInfo、DoAction 退款(R) |
-| **站內付 2.0 (ECPG)** | [developers.ecpay.com.tw/?p=8972](https://developers.ecpay.com.tw/?p=8972) | ❌ 尚未實作（AES JSON Token / PayToken / 前端 JS） |
+| 系列 | Factory | `name` | create 結果 |
+| --- | --- | --- | --- |
+| **全方位金流 (AIO)** | `createEcpayProvider` | `"ecpay"` | `{ mode: "redirect", action, params }` |
+| **站內付 2.0 (ECPG)** | `createEcpayEcpgProvider` | `"ecpay-ecpg"` | `{ mode: "token", token, merchantTradeNo }` |
 
-官方範例對照：
+```ts
+import { createEcpayEcpgProvider, ECPAY_SANDBOX } from "@paid-tw/payment-ecpay";
 
-- AIO PHP：https://github.com/ECPay/SDK_PHP/tree/master/example/Payment/Aio  
-- ECPG PHP：https://github.com/ECPay/SDK_PHP/tree/master/example/Payment/Ecpg  
-- AIO Python：https://github.com/ECPay/ECPayAIO_Python  
+const ecpg = createEcpayEcpgProvider({ ...ECPAY_SANDBOX });
 
-完整缺口表與 roadmap：[`docs/ecpay-api-coverage.md`](../../docs/ecpay-api-coverage.md)。
+// 1) Server: GetTokenbyTrade
+const { token, merchantTradeNo } = await ecpg.createPayment({
+  amount: 100,
+  currency: "TWD",
+  method: "card",
+  orderId: "ORDER123",
+  notifyUrl: "https://example.com/notify",
+  email: "buyer@example.com",
+});
+
+// 2) Browser: ECPay JS SDK createPayment(token) → getPayToken()
+// 3) Server: CreatePayment
+const paid = await ecpg.createPaymentWithPayToken({
+  payToken: "...",
+  merchantTradeNo,
+});
+// paid.threeDUrl? → full-page 3DS; or atm/cvs take-number fields
+```
+
+前端 JS 與樣式不在此 Node SDK 範圍內，請依綠界站內付 2.0 Web 文件載入官方 SDK。
+
+完整缺口表：[`docs/ecpay-api-coverage.md`](../../docs/ecpay-api-coverage.md)。
