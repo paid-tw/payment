@@ -4,6 +4,12 @@
   "private": true,
   "description": "Unified Taiwan payment SDK — one PaymentProvider interface, multiple gateway adapters (PAYUNi, NewebPay, ECPay).",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paid-tw/payment.git"
+  },
+  "homepage": "https://github.com/paid-tw/payment#readme",
+  "bugs": "https://github.com/paid-tw/payment/issues",
   "type": "module",
   "scripts": {
     "build": "pnpm -r --filter './packages/*' build",
