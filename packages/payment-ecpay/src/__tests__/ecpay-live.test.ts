@@ -1,10 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { isPaymentError, type PaymentError } from "@paid-tw/payment";
-import {
-  ECPAY_ORIGINS,
-  ECPAY_SANDBOX,
-  ECPAY_SANDBOX_PORTAL,
-} from "../config.js";
+import { ECPAY_ORIGINS, ECPAY_SANDBOX, ECPAY_SANDBOX_PORTAL } from "../config.js";
 import { computeCheckMacValue } from "../provider.js";
 import { stageProvider } from "./ecpay-server.js";
 
@@ -63,11 +59,7 @@ describe.skipIf(!live)("ECPay live — public stage merchant 3002607", LIVE_OPTS
     expect(form.params.ReturnURL).toBe("https://example.com/ecpay/notify");
 
     // Independent re-sign: proves HashKey/HashIV match ECPay's stage pair.
-    const expected = computeCheckMacValue(
-      form.params,
-      ECPAY_SANDBOX.hashKey,
-      ECPAY_SANDBOX.hashIv,
-    );
+    const expected = computeCheckMacValue(form.params, ECPAY_SANDBOX.hashKey, ECPAY_SANDBOX.hashIv);
     expect(form.params.CheckMacValue).toBe(expected);
 
     if (process.env.PAID_DEBUG === "1") {

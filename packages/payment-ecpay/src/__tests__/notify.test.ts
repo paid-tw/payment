@@ -1,11 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { PaymentError } from "@paid-tw/payment";
 import { ECPAY_SANDBOX } from "../config.js";
-import {
-  ECPAY_NOTIFY_ACK,
-  coerceNotifyBody,
-  verifyPaymentNotify,
-} from "../notify.js";
+import { ECPAY_NOTIFY_ACK, coerceNotifyBody, verifyPaymentNotify } from "../notify.js";
 import { computeCheckMacValue, createEcpayProvider } from "../provider.js";
 
 /** Official PHP SDK sample (GetCheckoutResponse.php) — CheckMacValue verified offline. */

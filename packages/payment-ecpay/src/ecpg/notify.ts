@@ -183,13 +183,12 @@ export function verifyEcpgPaymentNotify(
             accountNo: atmInfo.ATMAccNo !== undefined ? String(atmInfo.ATMAccNo) : undefined,
           }
         : undefined,
-    cvs:
-      cvsInfo.PaymentNo
-        ? {
-            paymentNo: String(cvsInfo.PaymentNo),
-            payFrom: cvsInfo.PayFrom !== undefined ? String(cvsInfo.PayFrom) : undefined,
-          }
-        : undefined,
+    cvs: cvsInfo.PaymentNo
+      ? {
+          paymentNo: String(cvsInfo.PaymentNo),
+          payFrom: cvsInfo.PayFrom !== undefined ? String(cvsInfo.PayFrom) : undefined,
+        }
+      : undefined,
     data,
     envelope,
   };

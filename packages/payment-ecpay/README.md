@@ -10,14 +10,11 @@ Implements `PaymentProvider` with:
 - **creditDoAction** → low-level DoAction
 - **queryCreditTrade** → CreditDetail/QueryTrade/V2（需 `creditCheckCode`）
 - **verifyPaymentNotify** → ReturnURL / OrderResultURL CheckMacValue verify
+
 ## Usage
 
 ```ts
-import {
-  createEcpayProvider,
-  ECPAY_SANDBOX,
-  ECPAY_NOTIFY_ACK,
-} from "@paid-tw/payment-ecpay";
+import { createEcpayProvider, ECPAY_SANDBOX, ECPAY_NOTIFY_ACK } from "@paid-tw/payment-ecpay";
 
 const ecpay = createEcpayProvider({
   ...ECPAY_SANDBOX, // or your production credentials
@@ -49,16 +46,16 @@ app.post("/ecpay/notify", (req, res) => {
 
 綠界在文件公布的**模擬銀行 3D 驗證 / 中租無卡分期**測試特店（明碼，可直接用於整合測試）：
 
-| 項目 | 值 |
-| --- | --- |
-| MerchantID | `3002607` |
-| HashKey | `pwFHCqoQZGmho4w6` |
-| HashIV | `EkRm7iFT261dpevs` |
-| 統一編號 | `00000000` |
-| 後台帳號 | `stagetest3` |
-| 後台密碼 | `test1234` |
+| 項目       | 值                                   |
+| ---------- | ------------------------------------ |
+| MerchantID | `3002607`                            |
+| HashKey    | `pwFHCqoQZGmho4w6`                   |
+| HashIV     | `EkRm7iFT261dpevs`                   |
+| 統一編號   | `00000000`                           |
+| 後台帳號   | `stagetest3`                         |
+| 後台密碼   | `test1234`                           |
 | 金流 stage | `https://payment-stage.ecpay.com.tw` |
-| 特店後台 | `https://vendor-stage.ecpay.com.tw` |
+| 特店後台   | `https://vendor-stage.ecpay.com.tw`  |
 
 SDK 常數：`ECPAY_SANDBOX`、`ECPAY_SANDBOX_PORTAL`（後台登入僅供人工 QA，API 不用）。
 
@@ -66,10 +63,10 @@ SDK 常數：`ECPAY_SANDBOX`、`ECPAY_SANDBOX_PORTAL`（後台登入僅供人工
 
 ## 測試：MSW + live
 
-| 模式 | 指令 | 說明 |
-| --- | --- | --- |
+| 模式               | 指令                                                           | 說明                                                            |
+| ------------------ | -------------------------------------------------------------- | --------------------------------------------------------------- |
 | **MSW（預設 CI）** | `pnpm test` 或 `pnpm --filter @paid-tw/payment-ecpay test:msw` | 離線；用錄製的 stage 回應 + 同一組 3002607 金鑰驗 CheckMacValue |
-| **Live** | `ECPAY_LIVE=1 pnpm test:live:ecpay` | 打真實 `payment-stage`；預設即用公開特店，不必設 env |
+| **Live**           | `ECPAY_LIVE=1 pnpm test:live:ecpay`                            | 打真實 `payment-stage`；預設即用公開特店，不必設 env            |
 
 ```bash
 # 離線（MSW）
@@ -89,9 +86,9 @@ MSW 的 default handlers 會對已知 `MerchantTradeNo` 重放 field-exact fixtu
 綠界金流有兩條產品線，**同一 npm 套件、兩個 factory、兩個 `name`**（詳見
 [`docs/ecpay-provider-separation.md`](../../docs/ecpay-provider-separation.md)）：
 
-| 系列 | Factory | `name` | create 結果 |
-| --- | --- | --- | --- |
-| **全方位金流 (AIO)** | `createEcpayProvider` | `"ecpay"` | `{ mode: "redirect", action, params }` |
+| 系列                  | Factory                   | `name`         | create 結果                                 |
+| --------------------- | ------------------------- | -------------- | ------------------------------------------- |
+| **全方位金流 (AIO)**  | `createEcpayProvider`     | `"ecpay"`      | `{ mode: "redirect", action, params }`      |
 | **站內付 2.0 (ECPG)** | `createEcpayEcpgProvider` | `"ecpay-ecpg"` | `{ mode: "token", token, merchantTradeNo }` |
 
 ```ts

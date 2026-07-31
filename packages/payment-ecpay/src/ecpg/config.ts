@@ -11,10 +11,7 @@ export interface EcpgProviderConfig extends ProviderRuntimeConfig {
   platformId?: string;
 }
 
-export function resolveEcpgOrigin(config: {
-  baseUrl?: string;
-  sandbox?: boolean;
-}): string {
+export function resolveEcpgOrigin(config: { baseUrl?: string; sandbox?: boolean }): string {
   if (config.baseUrl) return config.baseUrl.replace(/\/+$/, "");
   return (config.sandbox ? ECPG_ORIGINS.sandbox : ECPG_ORIGINS.production).replace(/\/+$/, "");
 }

@@ -60,13 +60,7 @@ export const ECPAY_SANDBOX_PORTAL = {
  * Resolve the gateway origin. `baseUrl` wins (MSW / custom hosts); otherwise
  * `sandbox` selects stage vs production.
  */
-export function resolveEcpayOrigin(config: {
-  baseUrl?: string;
-  sandbox?: boolean;
-}): string {
+export function resolveEcpayOrigin(config: { baseUrl?: string; sandbox?: boolean }): string {
   if (config.baseUrl) return config.baseUrl.replace(/\/+$/, "");
-  return (config.sandbox ? ECPAY_ORIGINS.sandbox : ECPAY_ORIGINS.production).replace(
-    /\/+$/,
-    "",
-  );
+  return (config.sandbox ? ECPAY_ORIGINS.sandbox : ECPAY_ORIGINS.production).replace(/\/+$/, "");
 }

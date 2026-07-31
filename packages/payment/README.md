@@ -30,11 +30,11 @@ if (supports(payments, Capability.GET_PAYMENT)) {
 
 ## Packages
 
-| Package | Role |
-| --- | --- |
-| `@paid-tw/payment` | Core types, `PaymentProvider`, capabilities, `PaymentError`, `MockProvider` |
-| `@paid-tw/payment-ecpay` | ECPay 綠界 |
-| `@paid-tw/payment-payuni` | PAYUNi 統一金流 |
-| `@paid-tw/payment-newebpay` | NewebPay 藍新（scaffold） |
+| Package                     | Role                                                                        |
+| --------------------------- | --------------------------------------------------------------------------- |
+| `@paid-tw/payment`          | Core types, `PaymentProvider`, capabilities, `PaymentError`, `MockProvider` |
+| `@paid-tw/payment-ecpay`    | ECPay 綠界                                                                  |
+| `@paid-tw/payment-payuni`   | PAYUNi 統一金流                                                             |
+| `@paid-tw/payment-newebpay` | NewebPay 藍新（scaffold）                                                   |
 
 Core **never** depends on adapters. Consumers compose which adapters they import.

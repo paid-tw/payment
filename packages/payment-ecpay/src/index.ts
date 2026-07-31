@@ -1,8 +1,5 @@
 // @paid-tw/payment-ecpay — ECPay 綠界 All-in-One payment adapter.
-export {
-  createEcpayProvider,
-  computeCheckMacValue,
-} from "./provider.js";
+export { createEcpayProvider, computeCheckMacValue } from "./provider.js";
 export type {
   EcpayProvider,
   EcpayCheckoutForm,
@@ -21,11 +18,7 @@ export {
   resolveEcpayOrigin,
 } from "./config.js";
 export type { EcpayProviderConfig } from "./config.js";
-export {
-  ECPAY_NOTIFY_ACK,
-  coerceNotifyBody,
-  verifyPaymentNotify,
-} from "./notify.js";
+export { ECPAY_NOTIFY_ACK, coerceNotifyBody, verifyPaymentNotify } from "./notify.js";
 export type {
   EcpayNotifyBody,
   EcpayNotifyCredentials,

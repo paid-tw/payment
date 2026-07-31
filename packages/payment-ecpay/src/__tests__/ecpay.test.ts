@@ -472,7 +472,9 @@ describe("ECPay creditDoAction (C/E/N)", () => {
       http.post(DOACTION_URL, async ({ request }) => {
         const b = Object.fromEntries(new URLSearchParams(await request.text()).entries());
         actions.push(b.Action ?? "");
-        return HttpResponse.text(queryResponse({ TradeNo: "2303120099", RtnCode: "1", RtnMsg: "OK" }));
+        return HttpResponse.text(
+          queryResponse({ TradeNo: "2303120099", RtnCode: "1", RtnMsg: "OK" }),
+        );
       }),
     );
     const p = testProvider();
@@ -521,7 +523,12 @@ describe("ECPay queryCreditTrade", () => {
             authtime: "2016/5/12 下午 07:09:17",
             status: "已關帳",
             close_data: [
-              { status: "已關帳", sno: "2782343", amount: "100", datetime: "2016/5/12 下午 08:00:00" },
+              {
+                status: "已關帳",
+                sno: "2782343",
+                amount: "100",
+                datetime: "2016/5/12 下午 08:00:00",
+              },
             ],
           },
         });
@@ -554,7 +561,9 @@ describe("ECPay queryCreditTrade", () => {
 
   it("maps RtnMsg error tokens to PROVIDER", async () => {
     server.use(
-      http.post(CREDIT_QUERY_URL, () => HttpResponse.json({ RtnMsg: "error_nopay", RtnValue: null })),
+      http.post(CREDIT_QUERY_URL, () =>
+        HttpResponse.json({ RtnMsg: "error_nopay", RtnValue: null }),
+      ),
     );
     const err = await testProvider({ creditCheckCode: "1" })
       .queryCreditTrade({ creditRefundId: 9, amount: 10 })

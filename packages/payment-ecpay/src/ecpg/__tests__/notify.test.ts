@@ -68,10 +68,7 @@ describe("verifyEcpgPaymentNotify", () => {
   });
 
   it("flags SimulatePaid=1", () => {
-    const notify = verifyEcpgPaymentNotify(
-      envelope(paidCardData({ SimulatePaid: 1 })),
-      CREDS,
-    );
+    const notify = verifyEcpgPaymentNotify(envelope(paidCardData({ SimulatePaid: 1 })), CREDS);
     expect(notify.success).toBe(true);
     expect(notify.simulated).toBe(true);
   });

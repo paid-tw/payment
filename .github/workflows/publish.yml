@@ -1,0 +1,54 @@
+name: Publish
+
+# Tag a release with a plain `vX.Y.Z` tag (after `pnpm changeset version` +
+# commit, or when package.json versions already match the intended release)
+# and push it; this publishes every workspace package whose version
+# isn't already on the registry.
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  id-token: write # Required for npm OIDC trusted publishing
+  contents: read
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      # No `version:` — pnpm/action-setup reads `packageManager` from package.json.
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: "24"
+          registry-url: "https://registry.npmjs.org"
+
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm -r build
+      - run: pnpm test
+
+      # npm >= 11.5.1 (on Node 24) does tokenless OIDC trusted publishing. We
+      # publish a `pnpm pack` tarball (which rewrites the `workspace:*` ranges to
+      # real versions) so npm handles auth + provenance and pnpm handles the
+      # workspace resolution. No NODE_AUTH_TOKEN: each package has a Trusted
+      # Publisher configured for this repo + workflow on npmjs.com.
+      - run: npm install -g npm@latest
+      - name: Publish changed packages (OIDC + provenance)
+        run: |
+          for dir in packages/*/; do
+            [ -f "${dir}package.json" ] || continue
+            node -e "process.exit(require('./${dir}package.json').private ? 1 : 0)" || continue
+            name=$(node -p "require('./${dir}package.json').name")
+            ver=$(node -p "require('./${dir}package.json').version")
+            if npm view "${name}@${ver}" version >/dev/null 2>&1; then
+              echo "::notice::${name}@${ver} already published — skipping"
+              continue
+            fi
+            echo "::group::publish ${name}@${ver}"
+            ( cd "$dir" && pnpm pack && npm publish ./*.tgz --access public --provenance )
+            echo "::endgroup::"
+          done

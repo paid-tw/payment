@@ -6,12 +6,12 @@
 
 ## 套件
 
-| 套件 | 角色 |
-| --- | --- |
-| [`@paid-tw/payment`](./packages/payment) | core：型別、`PaymentProvider`、capabilities、`PaymentError`、`MockProvider` |
-| [`@paid-tw/payment-ecpay`](./packages/payment-ecpay) | ECPay 綠界 — AioCheckOut / QueryTradeInfo / DoAction |
-| [`@paid-tw/payment-payuni`](./packages/payment-payuni) | PAYUNi 統一金流 — trade query（create/refund WIP） |
-| [`@paid-tw/payment-newebpay`](./packages/payment-newebpay) | NewebPay 藍新 — scaffold |
+| 套件                                                       | 角色                                                                        |
+| ---------------------------------------------------------- | --------------------------------------------------------------------------- |
+| [`@paid-tw/payment`](./packages/payment)                   | core：型別、`PaymentProvider`、capabilities、`PaymentError`、`MockProvider` |
+| [`@paid-tw/payment-ecpay`](./packages/payment-ecpay)       | ECPay 綠界 — AioCheckOut / QueryTradeInfo / DoAction                        |
+| [`@paid-tw/payment-payuni`](./packages/payment-payuni)     | PAYUNi 統一金流 — trade query（create/refund WIP）                          |
+| [`@paid-tw/payment-newebpay`](./packages/payment-newebpay) | NewebPay 藍新 — scaffold                                                    |
 
 只需安裝你會用到的供應商。**core 永不依賴 adapters**；由 CLI / app compose。
 
@@ -64,15 +64,27 @@ pnpm test
 pnpm test:live:ecpay
 ```
 
-綠界有 **AIO 導轉** 與 **站內付 2.0 (ECPG)** 兩套 API；目前只覆蓋 AIO 核心路徑。  
-對照官方文件 / PHP / Python 範例的完整矩陣：[`docs/ecpay-api-coverage.md`](./docs/ecpay-api-coverage.md)。
+綠界有 **AIO 導轉** 與 **站內付 2.0 (ECPG)** 兩套 API（同一套件、兩個 factory）。  
+覆蓋矩陣：[`docs/ecpay-api-coverage.md`](./docs/ecpay-api-coverage.md)。  
+AIO vs ECPG 區隔：[`docs/ecpay-provider-separation.md`](./docs/ecpay-provider-separation.md)。
+
+## 發布
+
+- CI / tag publish：`.github/workflows/`
+- Changesets：`pnpm changeset`
+- npm OIDC trusted publishing 步驟：[`docs/release.md`](./docs/release.md)
+
+```bash
+pnpm changeset version
+git tag v0.1.0 && git push origin main --tags
+```
 
 ## 邊界
 
-| 放這裡 | 不放這裡 |
-| --- | --- |
+| 放這裡                                                   | 不放這裡                                          |
+| -------------------------------------------------------- | ------------------------------------------------- |
 | create / get / refund、簽章、endpoint、normalized errors | 特店申請、bind merchant、mermcc、KYC（→ paid.tw） |
-| adapter 專有 extension | CLI flags / table 輸出（→ `@paid-tw/cli`） |
+| adapter 專有 extension                                   | CLI flags / table 輸出（→ `@paid-tw/cli`）        |
 
 ## License
 

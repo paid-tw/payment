@@ -12,11 +12,7 @@ import {
   type NormalizedPaymentData,
 } from "@paid-tw/payment";
 import { type EcpayProviderConfig, resolveEcpayOrigin } from "./config.js";
-import {
-  type EcpayNotifyInput,
-  type EcpayPaymentNotify,
-  verifyPaymentNotify,
-} from "./notify.js";
+import { type EcpayNotifyInput, type EcpayPaymentNotify, verifyPaymentNotify } from "./notify.js";
 
 const CAPABILITIES: ReadonlySet<Capability> = new Set<Capability>([
   "CREATE_PAYMENT",
@@ -115,11 +111,23 @@ export interface EcpayProvider extends PaymentProvider {
   /** Low-level CreditDetail/DoAction (C/R/E/N). Credit-card only. */
   creditDoAction(input: EcpayCreditDoActionInput): Promise<EcpayCreditDoActionResult>;
   /** DoAction Action=C (關帳 / capture). */
-  capturePayment(input: { orderId: string; amount?: number; tradeNo?: string }): Promise<EcpayCreditDoActionResult>;
+  capturePayment(input: {
+    orderId: string;
+    amount?: number;
+    tradeNo?: string;
+  }): Promise<EcpayCreditDoActionResult>;
   /** DoAction Action=E (取消關帳). */
-  cancelClose(input: { orderId: string; amount?: number; tradeNo?: string }): Promise<EcpayCreditDoActionResult>;
+  cancelClose(input: {
+    orderId: string;
+    amount?: number;
+    tradeNo?: string;
+  }): Promise<EcpayCreditDoActionResult>;
   /** DoAction Action=N (放棄 — pre-close void / release auth). */
-  abandonPayment(input: { orderId: string; amount?: number; tradeNo?: string }): Promise<EcpayCreditDoActionResult>;
+  abandonPayment(input: {
+    orderId: string;
+    amount?: number;
+    tradeNo?: string;
+  }): Promise<EcpayCreditDoActionResult>;
   /**
    * CreditDetail/QueryTrade/V2 — card lifecycle status (已授權/已關帳/…).
    * Needs {@link EcpayProviderConfig.creditCheckCode} or per-call creditCheckCode.

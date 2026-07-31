@@ -2,19 +2,28 @@
   "name": "@paid-tw/payment",
   "version": "0.1.0",
   "description": "Provider-agnostic core for Taiwan payment gateways: unified types, PaymentProvider interface, capabilities, and PaymentError.",
+  "keywords": [
+    "ecpay",
+    "gateway",
+    "newebpay",
+    "payment",
+    "payuni",
+    "taiwan",
+    "金流"
+  ],
+  "homepage": "https://github.com/paid-tw/payment/tree/main/packages/payment#readme",
+  "bugs": "https://github.com/paid-tw/payment/issues",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/paid-tw/payment.git",
     "directory": "packages/payment"
   },
-  "homepage": "https://github.com/paid-tw/payment/tree/main/packages/payment#readme",
-  "bugs": "https://github.com/paid-tw/payment/issues",
-  "type": "module",
-  "sideEffects": false,
   "files": [
     "dist"
   ],
+  "type": "module",
+  "sideEffects": false,
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -30,6 +39,9 @@
       }
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
@@ -38,17 +50,5 @@
   "devDependencies": {
     "tsdown": "^0.22.3",
     "typescript": "^5.6.0"
-  },
-  "keywords": [
-    "payment",
-    "gateway",
-    "taiwan",
-    "金流",
-    "payuni",
-    "newebpay",
-    "ecpay"
-  ],
-  "publishConfig": {
-    "access": "public"
   }
 }

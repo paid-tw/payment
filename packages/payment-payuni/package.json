@@ -2,17 +2,26 @@
   "name": "@paid-tw/payment-payuni",
   "version": "0.1.0",
   "description": "PAYUNi 統一金流 adapter for @paid-tw/payment — trade query (create/refund WIP).",
+  "keywords": [
+    "payment",
+    "payuni",
+    "taiwan",
+    "統一金流",
+    "金流"
+  ],
+  "homepage": "https://github.com/paid-tw/payment/tree/main/packages/payment-payuni#readme",
+  "bugs": "https://github.com/paid-tw/payment/issues",
   "license": "MIT",
   "repository": {
     "type": "git",
     "url": "git+https://github.com/paid-tw/payment.git",
     "directory": "packages/payment-payuni"
   },
-  "homepage": "https://github.com/paid-tw/payment/tree/main/packages/payment-payuni#readme",
-  "bugs": "https://github.com/paid-tw/payment/issues",
+  "files": [
+    "dist"
+  ],
   "type": "module",
   "sideEffects": false,
-  "files": ["dist"],
   "main": "./dist/index.cjs",
   "module": "./dist/index.js",
   "types": "./dist/index.d.ts",
@@ -28,6 +37,9 @@
       }
     }
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsdown",
     "dev": "tsdown --watch",
@@ -39,9 +51,5 @@
   "devDependencies": {
     "tsdown": "^0.22.3",
     "typescript": "^5.6.0"
-  },
-  "keywords": ["payment", "payuni", "統一金流", "taiwan", "金流"],
-  "publishConfig": {
-    "access": "public"
   }
 }

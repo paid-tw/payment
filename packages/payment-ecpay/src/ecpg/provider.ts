@@ -149,8 +149,7 @@ export function createEcpayEcpgProvider(config: EcpgProviderConfig): EcpayEcpgPr
         );
       }
 
-      const choosePaymentList =
-        input.choosePaymentList ?? mapChoosePaymentList(input.method);
+      const choosePaymentList = input.choosePaymentList ?? mapChoosePaymentList(input.method);
 
       const data: Record<string, unknown> = {
         MerchantID: merchantId,
@@ -305,23 +304,21 @@ function normalizeCreatePaymentResult(decoded: Record<string, unknown>): EcpgCre
             expireDate: atm.ExpireDate !== undefined ? String(atm.ExpireDate) : undefined,
           }
         : undefined,
-    cvs:
-      cvs.PaymentNo
-        ? {
-            paymentNo: String(cvs.PaymentNo),
-            expireDate: cvs.ExpireDate !== undefined ? String(cvs.ExpireDate) : undefined,
-            paymentUrl: cvs.PaymentURL !== undefined ? String(cvs.PaymentURL) : undefined,
-          }
-        : undefined,
-    barcode:
-      barcode.Barcode1
-        ? {
-            barcode1: String(barcode.Barcode1),
-            barcode2: barcode.Barcode2 !== undefined ? String(barcode.Barcode2) : undefined,
-            barcode3: barcode.Barcode3 !== undefined ? String(barcode.Barcode3) : undefined,
-            expireDate: barcode.ExpireDate !== undefined ? String(barcode.ExpireDate) : undefined,
-          }
-        : undefined,
+    cvs: cvs.PaymentNo
+      ? {
+          paymentNo: String(cvs.PaymentNo),
+          expireDate: cvs.ExpireDate !== undefined ? String(cvs.ExpireDate) : undefined,
+          paymentUrl: cvs.PaymentURL !== undefined ? String(cvs.PaymentURL) : undefined,
+        }
+      : undefined,
+    barcode: barcode.Barcode1
+      ? {
+          barcode1: String(barcode.Barcode1),
+          barcode2: barcode.Barcode2 !== undefined ? String(barcode.Barcode2) : undefined,
+          barcode3: barcode.Barcode3 !== undefined ? String(barcode.Barcode3) : undefined,
+          expireDate: barcode.ExpireDate !== undefined ? String(barcode.ExpireDate) : undefined,
+        }
+      : undefined,
     raw: decoded,
   };
 }

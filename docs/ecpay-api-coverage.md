@@ -12,16 +12,16 @@ Package today: `@paid-tw/payment-ecpay` implements a **subset of 全方位金流
 
 ## Two product lines (do not mix)
 
-| | 全方位金流 **AIO** | 站內付 2.0 **ECPG** |
-| --- | --- | --- |
-| Docs | [p=2509](https://developers.ecpay.com.tw/?p=2509) | [p=8972](https://developers.ecpay.com.tw/?p=8972) |
-| UX | Redirect to ECPay cashier page | Embed ECPay payment UI on merchant site (JS SDK) |
-| Host (stage) | `payment-stage.ecpay.com.tw` | `ecpg-stage.ecpay.com.tw` (+ AES ops on `ecpayment-stage…` for some credit actions) |
-| Wire format | `application/x-www-form-urlencoded` + **CheckMacValue** (SHA256) | JSON envelope `MerchantID` + `RqHeader` + AES-encrypted **`Data`** |
-| Create flow | Auto-submit form → `Cashier/AioCheckOut/V5` | Server `GetTokenbyTrade` → browser `ECPay.createPayment(Token)` → `getPayToken` → server `CreatePayment` |
-| PCI | Card data never on merchant (cashier hosted) | Card UI hosted by ECPay JS (no PCI-DSS for merchant) |
-| Official PHP samples | `example/Payment/Aio/*` | `example/Payment/Ecpg/*` |
-| Official Python samples | `ECPayAIO_Python/sample/*` | (not in AIO_Python repo) |
+|                         | 全方位金流 **AIO**                                               | 站內付 2.0 **ECPG**                                                                                      |
+| ----------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
+| Docs                    | [p=2509](https://developers.ecpay.com.tw/?p=2509)                | [p=8972](https://developers.ecpay.com.tw/?p=8972)                                                        |
+| UX                      | Redirect to ECPay cashier page                                   | Embed ECPay payment UI on merchant site (JS SDK)                                                         |
+| Host (stage)            | `payment-stage.ecpay.com.tw`                                     | `ecpg-stage.ecpay.com.tw` (+ AES ops on `ecpayment-stage…` for some credit actions)                      |
+| Wire format             | `application/x-www-form-urlencoded` + **CheckMacValue** (SHA256) | JSON envelope `MerchantID` + `RqHeader` + AES-encrypted **`Data`**                                       |
+| Create flow             | Auto-submit form → `Cashier/AioCheckOut/V5`                      | Server `GetTokenbyTrade` → browser `ECPay.createPayment(Token)` → `getPayToken` → server `CreatePayment` |
+| PCI                     | Card data never on merchant (cashier hosted)                     | Card UI hosted by ECPay JS (no PCI-DSS for merchant)                                                     |
+| Official PHP samples    | `example/Payment/Aio/*`                                          | `example/Payment/Ecpg/*`                                                                                 |
+| Official Python samples | `ECPayAIO_Python/sample/*`                                       | (not in AIO_Python repo)                                                                                 |
 
 **Implication for our monorepo:** keep AIO and ECPG as separate modules (or clear subpaths), e.g.
 
@@ -41,39 +41,39 @@ Legend: ✅ implemented · 🟡 partial · ❌ missing · 🔌 optional / rarely
 
 ### Create order (AioCheckOut/V5)
 
-| Sample / doc scenario | ChoosePayment | Status | Notes |
-| --- | --- | --- | --- |
-| ALL | ALL | 🟡 | We map unknown methods → `ALL`; no `IgnorePayment` / language / custom fields |
-| Credit 一次付清 | Credit | ✅ | via `method: "card"` |
-| Credit 分期 | Credit + installment params | ❌ | Python/PHP `CreateInstallmentOrder` |
-| Credit 定期定額 | Credit + period params | ❌ | `CreatePeriodicOrder` / `CreditCardPeriodAction` |
-| ATM | ATM | ✅ | method `atm` → ChoosePayment ATM |
-| CVS | CVS | ✅ | method `cvs` |
-| BARCODE | BARCODE | ❌ | no method enum yet |
-| WebATM | WebATM | ❌ | |
-| Apple Pay | ApplePay | ❌ | |
-| TWQR | TWQR | ❌ | |
-| BNPL 無卡分期 | BNPL | ❌ | |
-| WeiXin | WeiXin | ❌ | |
-| Digital / Google Pay (legacy samples) | varies | ❌ | |
-| Extra create params | — | 🟡 | We set core fields + OrderResultURL/ClientBackURL; missing StoreID, Remark, IgnorePayment, NeedExtraPaidInfo, CustomField*, Language, PlatformID, ChooseSubPayment, ItemURL |
+| Sample / doc scenario                 | ChoosePayment               | Status | Notes                                                                                                                                                                        |
+| ------------------------------------- | --------------------------- | ------ | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| ALL                                   | ALL                         | 🟡     | We map unknown methods → `ALL`; no `IgnorePayment` / language / custom fields                                                                                                |
+| Credit 一次付清                       | Credit                      | ✅     | via `method: "card"`                                                                                                                                                         |
+| Credit 分期                           | Credit + installment params | ❌     | Python/PHP `CreateInstallmentOrder`                                                                                                                                          |
+| Credit 定期定額                       | Credit + period params      | ❌     | `CreatePeriodicOrder` / `CreditCardPeriodAction`                                                                                                                             |
+| ATM                                   | ATM                         | ✅     | method `atm` → ChoosePayment ATM                                                                                                                                             |
+| CVS                                   | CVS                         | ✅     | method `cvs`                                                                                                                                                                 |
+| BARCODE                               | BARCODE                     | ❌     | no method enum yet                                                                                                                                                           |
+| WebATM                                | WebATM                      | ❌     |                                                                                                                                                                              |
+| Apple Pay                             | ApplePay                    | ❌     |                                                                                                                                                                              |
+| TWQR                                  | TWQR                        | ❌     |                                                                                                                                                                              |
+| BNPL 無卡分期                         | BNPL                        | ❌     |                                                                                                                                                                              |
+| WeiXin                                | WeiXin                      | ❌     |                                                                                                                                                                              |
+| Digital / Google Pay (legacy samples) | varies                      | ❌     |                                                                                                                                                                              |
+| Extra create params                   | —                           | 🟡     | We set core fields + OrderResultURL/ClientBackURL; missing StoreID, Remark, IgnorePayment, NeedExtraPaidInfo, CustomField\*, Language, PlatformID, ChooseSubPayment, ItemURL |
 
 ### Server lifecycle (AIO)
 
-| Operation | Endpoint (typical) | Sample | Status |
-| --- | --- | --- | --- |
-| CheckMacValue sign/verify | — | all Aio | ✅ golden tests + stage live |
-| Query order | `Cashier/QueryTradeInfo/V5` | `QueryTrade.php` / `sample_order_search.py` | ✅ |
-| Credit DoAction refund (R) | `CreditDetail/DoAction` | `sample_credit_do_action.py` | ✅ `refundPayment` |
-| Credit DoAction capture/close (C) | same | Capture (AIO form style) | ✅ `capturePayment` |
-| Credit DoAction cancel (E) / abandon (N) | same | docs p=2885 | ✅ `cancelClose` / `abandonPayment` |
-| Period order action | period APIs | `CreditCardPeriodAction` | ❌ |
-| Query credit single detail | credit detail API | `QueryCreditTrade` | ✅ `queryCreditTrade` (needs creditCheckCode; prod-oriented) |
-| Query period trade | | `QueryPeridicTrade` | ❌ |
-| Query ATM/CVS/BARCODE payment info | | `QueryPaymentInfo` | ❌ |
-| Download reconcile / disbursement CSV | | Download* samples | 🔌 |
-| **Verify payment notify (ReturnURL)** | inbound POST | `GetCheckoutResponse.php` | ✅ `verifyPaymentNotify` + `ECPAY_NOTIFY_ACK` |
-| **Verify client OrderResultURL** | inbound POST | same shape | ✅ same helper (shared payload) |
+| Operation                                | Endpoint (typical)          | Sample                                      | Status                                                       |
+| ---------------------------------------- | --------------------------- | ------------------------------------------- | ------------------------------------------------------------ |
+| CheckMacValue sign/verify                | —                           | all Aio                                     | ✅ golden tests + stage live                                 |
+| Query order                              | `Cashier/QueryTradeInfo/V5` | `QueryTrade.php` / `sample_order_search.py` | ✅                                                           |
+| Credit DoAction refund (R)               | `CreditDetail/DoAction`     | `sample_credit_do_action.py`                | ✅ `refundPayment`                                           |
+| Credit DoAction capture/close (C)        | same                        | Capture (AIO form style)                    | ✅ `capturePayment`                                          |
+| Credit DoAction cancel (E) / abandon (N) | same                        | docs p=2885                                 | ✅ `cancelClose` / `abandonPayment`                          |
+| Period order action                      | period APIs                 | `CreditCardPeriodAction`                    | ❌                                                           |
+| Query credit single detail               | credit detail API           | `QueryCreditTrade`                          | ✅ `queryCreditTrade` (needs creditCheckCode; prod-oriented) |
+| Query period trade                       |                             | `QueryPeridicTrade`                         | ❌                                                           |
+| Query ATM/CVS/BARCODE payment info       |                             | `QueryPaymentInfo`                          | ❌                                                           |
+| Download reconcile / disbursement CSV    |                             | Download\* samples                          | 🔌                                                           |
+| **Verify payment notify (ReturnURL)**    | inbound POST                | `GetCheckoutResponse.php`                   | ✅ `verifyPaymentNotify` + `ECPAY_NOTIFY_ACK`                |
+| **Verify client OrderResultURL**         | inbound POST                | same shape                                  | ✅ same helper (shared payload)                              |
 
 ### AIO create optional product knobs (from Python credit sample)
 
@@ -86,27 +86,27 @@ Not exposed on `CreatePaymentRequest` today: `BindingCard`, `MerchantMemberID`, 
 **Status: core path landed** as `createEcpayEcpgProvider` (`name: "ecpay-ecpg"`).  
 See [ecpay-provider-separation.md](./ecpay-provider-separation.md).
 
-| Sample | Server API (stage host) | Status |
-| --- | --- | --- |
-| `Create*Order/GetToken.php` | `POST ecpg-stage…/Merchant/GetTokenbyTrade` | ✅ `createPayment` → `mode: "token"` |
-| `CreateOrder.php` (after PayToken) | `POST ecpg-stage…/Merchant/CreatePayment` | ✅ `createPaymentWithPayToken` |
-| `CreateAllOrder` / Credit / ATM / CVS / Barcode / Installment / ApplePay / UnionPay | GetToken variants + WebJS | ❌ |
-| `CreatePaymentWithCardID.php` | pay with bound card | ❌ |
-| `CreateBindCard.php` / bind-card order / delete / query member cards | card-on-file | ❌ |
-| `GetTokenbyBindingCard.php` | | ❌ |
-| `Capture.php` | `ecpayment-stage…/1.0.0/Credit/DoAction` **AES JSON** | ❌ (different host/crypto than AIO form DoAction) |
-| `QueryTrade` / `QueryCreditTrade` / `QueryPaymentInfo` / `QueryTradeMedia` / period | ECPG query family | ❌ |
-| `GetResponse.php` / notify verify | AES JSON response verify | ✅ `verifyEcpgPaymentNotify` / `ECPG_NOTIFY_ACK` |
-| Frontend `WebJS.html` + `ECPay.createPayment` | browser SDK | 🔌 document only (out of Node SDK scope) |
+| Sample                                                                              | Server API (stage host)                               | Status                                            |
+| ----------------------------------------------------------------------------------- | ----------------------------------------------------- | ------------------------------------------------- |
+| `Create*Order/GetToken.php`                                                         | `POST ecpg-stage…/Merchant/GetTokenbyTrade`           | ✅ `createPayment` → `mode: "token"`              |
+| `CreateOrder.php` (after PayToken)                                                  | `POST ecpg-stage…/Merchant/CreatePayment`             | ✅ `createPaymentWithPayToken`                    |
+| `CreateAllOrder` / Credit / ATM / CVS / Barcode / Installment / ApplePay / UnionPay | GetToken variants + WebJS                             | ❌                                                |
+| `CreatePaymentWithCardID.php`                                                       | pay with bound card                                   | ❌                                                |
+| `CreateBindCard.php` / bind-card order / delete / query member cards                | card-on-file                                          | ❌                                                |
+| `GetTokenbyBindingCard.php`                                                         |                                                       | ❌                                                |
+| `Capture.php`                                                                       | `ecpayment-stage…/1.0.0/Credit/DoAction` **AES JSON** | ❌ (different host/crypto than AIO form DoAction) |
+| `QueryTrade` / `QueryCreditTrade` / `QueryPaymentInfo` / `QueryTradeMedia` / period | ECPG query family                                     | ❌                                                |
+| `GetResponse.php` / notify verify                                                   | AES JSON response verify                              | ✅ `verifyEcpgPaymentNotify` / `ECPG_NOTIFY_ACK`  |
+| Frontend `WebJS.html` + `ECPay.createPayment`                                       | browser SDK                                           | 🔌 document only (out of Node SDK scope)          |
 
 ### ECPG server flow (must implement for “完整站內付”)
 
-1. **GetTokenbyTrade** — AES JSON; returns `Token` for JS SDK  
-2. Merchant page loads ECPay JS → `createPayment(Token)` → user pays → `getPayToken()`  
-3. **CreatePayment** — server sends `PayToken` + `MerchantTradeNo`  
-4. Optional 3DS URL redirect for cards  
-5. **ReturnURL** notify (verify AES envelope)  
-6. Credit lifecycle via ECPG AES DoAction where required  
+1. **GetTokenbyTrade** — AES JSON; returns `Token` for JS SDK
+2. Merchant page loads ECPay JS → `createPayment(Token)` → user pays → `getPayToken()`
+3. **CreatePayment** — server sends `PayToken` + `MerchantTradeNo`
+4. Optional 3DS URL redirect for cards
+5. **ReturnURL** notify (verify AES envelope)
+6. Credit lifecycle via ECPG AES DoAction where required
 
 Crypto stack ≠ AIO CheckMacValue: PHP uses `PostWithAesJsonResponseService` (AES encrypt `Data`, JSON RqHeader).
 
@@ -114,14 +114,14 @@ Crypto stack ≠ AIO CheckMacValue: PHP uses `PostWithAesJsonResponseService` (A
 
 ## Mapping to `@paid-tw/payment` core
 
-| Core method | AIO today | ECPG (planned) |
-| --- | --- | --- |
-| `createPayment` | Redirect form (`mode: "redirect"`) | Should return `{ mode: "token", token, merchantTradeNo }` or separate `createCheckoutToken()` |
-| `getPayment` | QueryTradeInfo | ECPG QueryTrade (AES) or shared query if merchant uses both |
-| `refundPayment` | DoAction R | ECPG Credit/DoAction AES |
-| (extension) `verifyNotify` | CheckMacValue on form body | AES decrypt + validate Data |
-| (extension) `capture` / `void` / `abandon` | DoAction C/E/N | AES DoAction |
-| (extension) `createPaymentWithPayToken` | n/a | ECPG step 3 |
+| Core method                                | AIO today                          | ECPG (planned)                                                                                |
+| ------------------------------------------ | ---------------------------------- | --------------------------------------------------------------------------------------------- |
+| `createPayment`                            | Redirect form (`mode: "redirect"`) | Should return `{ mode: "token", token, merchantTradeNo }` or separate `createCheckoutToken()` |
+| `getPayment`                               | QueryTradeInfo                     | ECPG QueryTrade (AES) or shared query if merchant uses both                                   |
+| `refundPayment`                            | DoAction R                         | ECPG Credit/DoAction AES                                                                      |
+| (extension) `verifyNotify`                 | CheckMacValue on form body         | AES decrypt + validate Data                                                                   |
+| (extension) `capture` / `void` / `abandon` | DoAction C/E/N                     | AES DoAction                                                                                  |
+| (extension) `createPaymentWithPayToken`    | n/a                                | ECPG step 3                                                                                   |
 
 Capabilities to add later:
 
@@ -143,29 +143,29 @@ Capabilities to add later:
 
 ### P1 — AIO credit lifecycle
 
-4. ~~DoAction **C / E / N**~~ — done (`creditDoAction` + capture/cancelClose/abandon).  
-5. ~~Query credit single detail~~ — done (`queryCreditTrade`).  
+4. ~~DoAction **C / E / N**~~ — done (`creditDoAction` + capture/cancelClose/abandon).
+5. ~~Query credit single detail~~ — done (`queryCreditTrade`).
 
 ### P2 — 站內付 2.0 (ECPG)
 
-6. ~~AES JSON + GetToken + CreatePayment~~ — done under `src/ecpg/*`, factory `createEcpayEcpgProvider`.  
-7. Live tests against ecpg-stage (when merchant has ECPG enabled) — open.  
-8. ~~Notify verify for AES callbacks~~ — done (`verifyEcpgPaymentNotify`).  
-9. README frontend JS steps — partial (README + separation doc).  
+6. ~~AES JSON + GetToken + CreatePayment~~ — done under `src/ecpg/*`, factory `createEcpayEcpgProvider`.
+7. Live tests against ecpg-stage (when merchant has ECPG enabled) — open.
+8. ~~Notify verify for AES callbacks~~ — done (`verifyEcpgPaymentNotify`).
+9. README frontend JS steps — partial (README + separation doc).
 
 ### P3 — long tail
 
-10. Period / installment / bind-card / reconcile downloads.  
+10. Period / installment / bind-card / reconcile downloads.
 
 ---
 
 ## Checklist vs repos (summary counts)
 
-| Area | Official sample count (approx.) | Implemented |
-| --- | --- | --- |
-| AIO create methods (Python samples) | ~14 create variants | ~4 (ALL/Credit/ATM/CVS via ChoosePayment) |
-| AIO ops (query/refund/period/download/notify) | ~8 | 2 (query + refund R) |
-| ECPG samples | ~25+ files/dirs | 0 |
-| Crypto primitives | CMV + AES JSON | CMV only |
+| Area                                          | Official sample count (approx.) | Implemented                               |
+| --------------------------------------------- | ------------------------------- | ----------------------------------------- |
+| AIO create methods (Python samples)           | ~14 create variants             | ~4 (ALL/Credit/ATM/CVS via ChoosePayment) |
+| AIO ops (query/refund/period/download/notify) | ~8                              | 2 (query + refund R)                      |
+| ECPG samples                                  | ~25+ files/dirs                 | 0                                         |
+| Crypto primitives                             | CMV + AES JSON                  | CMV only                                  |
 
 **Conclusion:** AIO **core path** (create redirect + query + credit refund R + MAC) is solid and stage-tested. Coverage is **not** complete against ECPay’s full surface: missing notify verification, full DoAction set, many payment methods/params, and the entire **站內付 2.0 / ECPG** stack.

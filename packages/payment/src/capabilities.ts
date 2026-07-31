@@ -47,10 +47,6 @@ export function assertSupports(
   const provider = providerOrName;
   const cap = capabilitiesOrCap as Capability;
   if (!provider.capabilities.has(cap)) {
-    throw new PaymentError(
-      "UNSUPPORTED",
-      `${provider.name} 尚未支援 ${cap}`,
-      provider.name,
-    );
+    throw new PaymentError("UNSUPPORTED", `${provider.name} 尚未支援 ${cap}`, provider.name);
   }
 }
