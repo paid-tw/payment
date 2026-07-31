@@ -72,8 +72,8 @@ Legend: ✅ implemented · 🟡 partial · ❌ missing · 🔌 optional / rarely
 | Query period trade | | `QueryPeridicTrade` | ❌ |
 | Query ATM/CVS/BARCODE payment info | | `QueryPaymentInfo` | ❌ |
 | Download reconcile / disbursement CSV | | Download* samples | 🔌 |
-| **Verify payment notify (ReturnURL)** | inbound POST | `GetCheckoutResponse.php` | ❌ critical for production |
-| **Verify client OrderResultURL** | inbound POST | same shape | ❌ |
+| **Verify payment notify (ReturnURL)** | inbound POST | `GetCheckoutResponse.php` | ✅ `verifyPaymentNotify` + `ECPAY_NOTIFY_ACK` |
+| **Verify client OrderResultURL** | inbound POST | same shape | ✅ same helper (shared payload) |
 
 ### AIO create optional product knobs (from Python credit sample)
 
@@ -136,9 +136,9 @@ Capabilities to add later:
 
 ### P0 — production AIO completeness
 
-1. **`verifyPaymentNotify` / `parseCheckoutResponse`** — parity with `GetCheckoutResponse.php` (ReturnURL + OrderResultURL). Without this, create/get alone is incomplete for real shops.
-2. Document create result as explicitly `redirect` (already partially done in types).
-3. Expand `ChoosePayment` mapping: BARCODE, WebATM, ApplePay, TWQR, BNPL (and optional `IgnorePayment` when ALL).
+1. ~~**`verifyPaymentNotify`**~~ — done (`notify.ts`, PHP + doc goldens).
+2. ~~create result `mode: "redirect"`~~ — done on `EcpayCheckoutForm`.
+3. Expand `ChoosePayment` mapping: BARCODE, WebATM, ApplePay, TWQR, BNPL (and optional `IgnorePayment` when ALL). → still open (P0.5 / with method enum)
 
 ### P1 — AIO credit lifecycle
 

@@ -4,29 +4,44 @@ ECPay 綠界 All-in-One adapter for [`@paid-tw/payment`](../payment).
 
 Implements `PaymentProvider` with:
 
-- **createPayment** → AioCheckOut V5 redirect form (not a completed charge)
+- **createPayment** → AioCheckOut V5 **redirect** form (`mode: "redirect"`, not a completed charge)
 - **getPayment** → QueryTradeInfo/V5
-- **refundPayment** → DoAction credit-card refund
+- **refundPayment** → DoAction credit-card refund (Action=R)
+- **verifyPaymentNotify** → ReturnURL / OrderResultURL CheckMacValue verify
 
 ## Usage
 
 ```ts
-import { createEcpayProvider, ECPAY_SANDBOX } from "@paid-tw/payment-ecpay";
+import {
+  createEcpayProvider,
+  ECPAY_SANDBOX,
+  ECPAY_NOTIFY_ACK,
+} from "@paid-tw/payment-ecpay";
 
-// Production: pass your own MerchantID / HashKey / HashIV.
-// Stage: ECPay publishes a shared test merchant (see below).
 const ecpay = createEcpayProvider({
-  ...ECPAY_SANDBOX, // or your credentials + sandbox: true
+  ...ECPAY_SANDBOX, // or your production credentials
 });
 
+// 1) Create — returns a redirect form, never "already paid"
 const form = await ecpay.createPayment({
   amount: 1000,
   currency: "TWD",
   method: "card",
   orderId: "ORDER123",
-  notifyUrl: "https://example.com/ecpay/notify",
+  notifyUrl: "https://example.com/ecpay/notify", // ReturnURL
+  returnUrl: "https://example.com/ecpay/result", // OrderResultURL (optional)
 });
-// Auto-submit form.action + form.params in the browser.
+// form.mode === "redirect" — auto-submit form.action + form.params in the browser.
+
+// 2) ReturnURL handler (server POST from ECPay)
+//    body = application/x-www-form-urlencoded fields
+app.post("/ecpay/notify", (req, res) => {
+  const notify = ecpay.verifyPaymentNotify(req.body);
+  if (notify.success && !notify.simulated) {
+    // mark order paid (idempotent on notify.merTradeNo)
+  }
+  res.type("text/plain").send(ECPAY_NOTIFY_ACK); // must be exactly "1|OK"
+});
 ```
 
 ## 公開測試特店（stage）

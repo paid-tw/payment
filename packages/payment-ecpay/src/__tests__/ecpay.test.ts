@@ -280,6 +280,7 @@ describe("ECPay createPayment (AioCheckOut)", () => {
       returnUrl: "https://shop.test/thanks",
     });
 
+    expect(form.mode).toBe("redirect");
     expect(form.action).toBe("https://ecpay.test/Cashier/AioCheckOut/V5");
     expect(form.method).toBe("POST");
     expect(form.params.MerchantTradeNo).toBe("ORDERC1");

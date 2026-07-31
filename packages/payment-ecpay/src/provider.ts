@@ -13,6 +13,11 @@ import {
   type NormalizedPaymentData,
 } from "@paid-tw/payment";
 import { resolveEcpayOrigin } from "./config.js";
+import {
+  type EcpayNotifyInput,
+  type EcpayPaymentNotify,
+  verifyPaymentNotify,
+} from "./notify.js";
 
 const CAPABILITIES: ReadonlySet<Capability> = new Set<Capability>([
   "CREATE_PAYMENT",
@@ -30,11 +35,14 @@ export interface EcpayRefundResult {
 }
 
 /**
- * ECPay's AioCheckOut is a browser-redirect flow, not a server-to-server call:
- * the merchant auto-submits this form to hand the buyer off to ECPay's cashier.
- * createPayment returns the endpoint + signed params rather than a settled txn.
+ * ECPay's AioCheckOut is a **browser redirect**, not a settled server-side charge.
+ * Auto-submit `action` + `params` so the buyer reaches the cashier; wait for
+ * ReturnURL notify ({@link EcpayProvider.verifyPaymentNotify}) or query later.
+ *
+ * `mode: "redirect"` is explicit so callers never treat this as "payment succeeded".
  */
 export interface EcpayCheckoutForm {
+  mode: "redirect";
   action: string;
   method: "POST";
   params: Record<string, string>;
@@ -48,6 +56,11 @@ export interface EcpayCheckoutForm {
 export interface EcpayProvider extends PaymentProvider {
   createPayment(input: CreatePaymentRequest): Promise<EcpayCheckoutForm>;
   refundPayment(input: RefundPaymentRequest): Promise<EcpayRefundResult>;
+  /**
+   * Verify a ReturnURL / OrderResultURL payment-result POST (CheckMacValue).
+   * On ReturnURL, respond with {@link import("./notify.js").ECPAY_NOTIFY_ACK}.
+   */
+  verifyPaymentNotify(input: EcpayNotifyInput): EcpayPaymentNotify;
 }
 
 /**
@@ -121,7 +134,17 @@ export function createEcpayProvider(config: ProviderRuntimeConfig): EcpayProvide
       }
       params.CheckMacValue = computeCheckMacValue(params, hashKey, hashIv);
 
-      return { action: `${origin}/Cashier/AioCheckOut/V5`, method: "POST", params };
+      return {
+        mode: "redirect",
+        action: `${origin}/Cashier/AioCheckOut/V5`,
+        method: "POST",
+        params,
+      };
+    },
+
+    verifyPaymentNotify(input: EcpayNotifyInput): EcpayPaymentNotify {
+      const { merchantId, hashKey, hashIv } = requireCredentials(config);
+      return verifyPaymentNotify(input, { merchantId, hashKey, hashIv });
     },
 
     async refundPayment(input: RefundPaymentRequest): Promise<EcpayRefundResult> {

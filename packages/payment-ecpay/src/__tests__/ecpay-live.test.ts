@@ -52,6 +52,7 @@ describe.skipIf(!live)("ECPay live — public stage merchant 3002607", LIVE_OPTS
       returnUrl: "https://example.com/ecpay/return",
     });
 
+    expect(form.mode).toBe("redirect");
     expect(form.action).toBe(`${ECPAY_ORIGINS.sandbox}/Cashier/AioCheckOut/V5`);
     expect(form.method).toBe("POST");
     expect(form.params.MerchantID).toBe(ECPAY_SANDBOX.merchantId);
