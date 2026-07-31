@@ -4,11 +4,12 @@ ECPay 綠界 All-in-One adapter for [`@paid-tw/payment`](../payment).
 
 Implements `PaymentProvider` with:
 
-- **createPayment** → AioCheckOut V5 **redirect** form (`mode: "redirect"`, not a completed charge)
+- **createPayment** → AioCheckOut V5 **redirect** form (`mode: "redirect"`; always `NeedExtraPaidInfo=Y`)
 - **getPayment** → QueryTradeInfo/V5
-- **refundPayment** → DoAction credit-card refund (Action=R)
+- **refundPayment** / **capturePayment** / **cancelClose** / **abandonPayment** → DoAction R/C/E/N
+- **creditDoAction** → low-level DoAction
+- **queryCreditTrade** → CreditDetail/QueryTrade/V2（需 `creditCheckCode`）
 - **verifyPaymentNotify** → ReturnURL / OrderResultURL CheckMacValue verify
-
 ## Usage
 
 ```ts

@@ -58,6 +58,11 @@ export interface EcpayPaymentNotify {
   rtnMsg: string;
   storeId?: string;
   paymentTypeChargeFee?: number;
+  /**
+   * 信用卡授權單號 for {@link import("./provider.js").EcpayProvider.queryCreditTrade}.
+   * Present when create used NeedExtraPaidInfo=Y (`gwsr` or `CreditRefundId`).
+   */
+  creditRefundId?: string;
   customFields?: {
     field1?: string;
     field2?: string;
@@ -136,6 +141,7 @@ export function verifyPaymentNotify(
     rtnMsg: raw.RtnMsg ?? "",
     storeId: raw.StoreID || undefined,
     paymentTypeChargeFee: asNumber(raw.PaymentTypeChargeFee),
+    creditRefundId: raw.gwsr || raw.CreditRefundId || undefined,
     customFields: {
       field1: raw.CustomField1 || undefined,
       field2: raw.CustomField2 || undefined,

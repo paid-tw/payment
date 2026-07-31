@@ -8,11 +8,10 @@ import {
   type GetPaymentRequest,
   type PaymentMethod,
   type PaymentProvider,
-  type ProviderRuntimeConfig,
   type RefundPaymentRequest,
   type NormalizedPaymentData,
 } from "@paid-tw/payment";
-import { resolveEcpayOrigin } from "./config.js";
+import { type EcpayProviderConfig, resolveEcpayOrigin } from "./config.js";
 import {
   type EcpayNotifyInput,
   type EcpayPaymentNotify,
@@ -25,13 +24,65 @@ const CAPABILITIES: ReadonlySet<Capability> = new Set<Capability>([
   "REFUND_PAYMENT",
 ]);
 
-/** Outcome of a DoAction credit-card refund (Action=R). */
-export interface EcpayRefundResult {
+/**
+ * CreditDetail/DoAction actions (docs p=2885):
+ * - `C` 關帳 / capture
+ * - `R` 退刷 / refund
+ * - `E` 取消關帳
+ * - `N` 放棄 (pre-close void)
+ */
+export type EcpayCreditAction = "C" | "R" | "E" | "N";
+
+export interface EcpayCreditDoActionInput {
+  orderId: string;
+  action: EcpayCreditAction;
+  /** Defaults to TradeAmt from QueryTradeInfo when omitted. */
+  amount?: number;
+  /** Skip the pre-query when the ECPay TradeNo is already known. */
+  tradeNo?: string;
+}
+
+/** Shared result for all DoAction ops (including refund). */
+export interface EcpayCreditDoActionResult {
+  action: EcpayCreditAction;
   tradeNo: string;
   rtnCode: string;
   rtnMsg: string;
   amount: number;
   raw: Record<string, string>;
+}
+
+/** @deprecated Prefer {@link EcpayCreditDoActionResult}; kept for refundPayment shape. */
+export type EcpayRefundResult = Omit<EcpayCreditDoActionResult, "action">;
+
+export interface EcpayCreditTradeQueryInput {
+  /**
+   * 信用卡授權單號 — notify field `gwsr` when NeedExtraPaidInfo=Y, or vendor console.
+   * @see https://developers.ecpay.com.tw/?p=2894
+   */
+  creditRefundId: string | number;
+  amount: number;
+  /** Overrides {@link EcpayProviderConfig.creditCheckCode}. */
+  creditCheckCode?: string | number;
+}
+
+export interface EcpayCreditCloseRow {
+  status?: string;
+  amount?: number;
+  sno?: string;
+  datetime?: string;
+}
+
+/** Normalized CreditDetail/QueryTrade/V2 body. */
+export interface EcpayCreditTradeDetail {
+  tradeId?: string;
+  amount?: number;
+  closedAmount?: number;
+  authTime?: string;
+  /** e.g. 已授權 / 已關帳 / 已取消 / 操作取消 */
+  status?: string;
+  closeData: EcpayCreditCloseRow[];
+  raw: unknown;
 }
 
 /**
@@ -61,15 +112,28 @@ export interface EcpayProvider extends PaymentProvider {
    * On ReturnURL, respond with {@link import("./notify.js").ECPAY_NOTIFY_ACK}.
    */
   verifyPaymentNotify(input: EcpayNotifyInput): EcpayPaymentNotify;
+  /** Low-level CreditDetail/DoAction (C/R/E/N). Credit-card only. */
+  creditDoAction(input: EcpayCreditDoActionInput): Promise<EcpayCreditDoActionResult>;
+  /** DoAction Action=C (關帳 / capture). */
+  capturePayment(input: { orderId: string; amount?: number; tradeNo?: string }): Promise<EcpayCreditDoActionResult>;
+  /** DoAction Action=E (取消關帳). */
+  cancelClose(input: { orderId: string; amount?: number; tradeNo?: string }): Promise<EcpayCreditDoActionResult>;
+  /** DoAction Action=N (放棄 — pre-close void / release auth). */
+  abandonPayment(input: { orderId: string; amount?: number; tradeNo?: string }): Promise<EcpayCreditDoActionResult>;
+  /**
+   * CreditDetail/QueryTrade/V2 — card lifecycle status (已授權/已關帳/…).
+   * Needs {@link EcpayProviderConfig.creditCheckCode} or per-call creditCheckCode.
+   * ECPay documents production-only real auth; stage may reject live calls.
+   */
+  queryCreditTrade(input: EcpayCreditTradeQueryInput): Promise<EcpayCreditTradeDetail>;
 }
 
 /**
  * ECPay (綠界科技) All-in-One adapter. Credentials + host live on the instance;
  * `baseUrl` (or the sandbox flag) selects the gateway origin so tests can point
- * it at an MSW mock. AioCheckOut (create), QueryTradeInfo/V5 (get) and DoAction
- * credit-card refund are implemented.
+ * it at an MSW mock.
  */
-export function createEcpayProvider(config: ProviderRuntimeConfig): EcpayProvider {
+export function createEcpayProvider(config: EcpayProviderConfig): EcpayProvider {
   const origin = resolveEcpayOrigin(config);
 
   /** POST QueryTradeInfo/V5 and return the verified, parsed field set. */
@@ -127,6 +191,8 @@ export function createEcpayProvider(config: ProviderRuntimeConfig): EcpayProvide
         ReturnURL: input.notifyUrl,
         ChoosePayment: mapChoosePayment(input.method),
         EncryptType: "1",
+        // Extra notify fields (gwsr / CreditRefundId) needed for queryCreditTrade.
+        NeedExtraPaidInfo: "Y",
       };
       if (input.returnUrl) {
         params.OrderResultURL = input.returnUrl;
@@ -147,58 +213,63 @@ export function createEcpayProvider(config: ProviderRuntimeConfig): EcpayProvide
       return verifyPaymentNotify(input, { merchantId, hashKey, hashIv });
     },
 
+    async creditDoAction(input: EcpayCreditDoActionInput): Promise<EcpayCreditDoActionResult> {
+      return runCreditDoAction(config, origin, queryTradeInfo, input);
+    },
+
+    async capturePayment(input) {
+      return runCreditDoAction(config, origin, queryTradeInfo, { ...input, action: "C" });
+    },
+
+    async cancelClose(input) {
+      return runCreditDoAction(config, origin, queryTradeInfo, { ...input, action: "E" });
+    },
+
+    async abandonPayment(input) {
+      return runCreditDoAction(config, origin, queryTradeInfo, { ...input, action: "N" });
+    },
+
     async refundPayment(input: RefundPaymentRequest): Promise<EcpayRefundResult> {
       assertSupports("ecpay", CAPABILITIES, "REFUND_PAYMENT");
-      const { merchantId, hashKey, hashIv } = requireCredentials(config);
+      const result = await runCreditDoAction(config, origin, queryTradeInfo, {
+        orderId: input.orderId,
+        action: "R",
+        amount: input.amount,
+      });
+      return {
+        tradeNo: result.tradeNo,
+        rtnCode: result.rtnCode,
+        rtnMsg: result.rtnMsg,
+        amount: result.amount,
+        raw: result.raw,
+      };
+    },
 
-      // DoAction needs ECPay's TradeNo + the paid amount; resolve them from the
-      // order first. ECPay's DoAction refund is credit-card only.
-      const info = await queryTradeInfo(input.orderId);
-      const tradeNo = info.TradeNo;
-      if (!tradeNo) {
-        throw new PaymentError("NOT_FOUND", `ECPay 查無訂單 ${input.orderId} 的 TradeNo`, "ecpay", {
-          raw: info,
-        });
-      }
-      if (info.PaymentType && !info.PaymentType.startsWith("Credit")) {
-        throw new PaymentError("VALIDATION", "ECPay 退款（DoAction）僅支援信用卡", "ecpay", {
-          raw: info,
-        });
-      }
-      const amount = input.amount ?? asNumber(info.TradeAmt);
-      if (amount === undefined) {
-        throw new PaymentError("VALIDATION", "ECPay 退款需要金額（--amount）", "ecpay");
+    async queryCreditTrade(input: EcpayCreditTradeQueryInput): Promise<EcpayCreditTradeDetail> {
+      const { merchantId, hashKey, hashIv } = requireCredentials(config);
+      const checkCode = input.creditCheckCode ?? config.creditCheckCode;
+      if (checkCode === undefined || checkCode === "") {
+        throw new PaymentError(
+          "AUTH",
+          "ECPay queryCreditTrade 需要 creditCheckCode（廠商後台 → 信用卡授權資訊）",
+          "ecpay",
+        );
       }
 
       const params: Record<string, string> = {
         MerchantID: merchantId,
-        MerchantTradeNo: input.orderId,
-        TradeNo: tradeNo,
-        Action: "R",
-        TotalAmount: String(Math.round(amount)),
+        CreditRefundId: String(input.creditRefundId),
+        CreditAmount: String(Math.round(input.amount)),
+        CreditCheckCode: String(checkCode),
       };
       params.CheckMacValue = computeCheckMacValue(params, hashKey, hashIv);
 
-      const text = await postForm(`${origin}/CreditDetail/DoAction`, params, "DoAction");
-      const parsed = Object.fromEntries(new URLSearchParams(text).entries());
-      verifyResponseMac(parsed, hashKey, hashIv);
-
-      const rtnCode = parsed.RtnCode ?? "";
-      if (rtnCode !== "1") {
-        throw new PaymentError(
-          "PROVIDER",
-          `ECPay DoAction 失敗: ${parsed.RtnMsg ?? rtnCode}`,
-          "ecpay",
-          { rawCode: rtnCode, rawMessage: parsed.RtnMsg, raw: parsed },
-        );
-      }
-      return {
-        tradeNo,
-        rtnCode,
-        rtnMsg: parsed.RtnMsg ?? "",
-        amount: Math.round(amount),
-        raw: parsed,
-      };
+      const text = await postForm(
+        `${origin}/CreditDetail/QueryTrade/V2`,
+        params,
+        "QueryCreditTrade",
+      );
+      return parseCreditTradeResponse(text);
     },
 
     async getPayment(input: GetPaymentRequest): Promise<NormalizedPaymentData> {
@@ -208,6 +279,138 @@ export function createEcpayProvider(config: ProviderRuntimeConfig): EcpayProvide
       }
       return normalizeQueryInfo(await queryTradeInfo(input.merTradeNo));
     },
+  };
+}
+
+type QueryTradeInfoFn = (merTradeNo: string) => Promise<Record<string, string>>;
+
+async function runCreditDoAction(
+  config: EcpayProviderConfig,
+  origin: string,
+  queryTradeInfo: QueryTradeInfoFn,
+  input: EcpayCreditDoActionInput,
+): Promise<EcpayCreditDoActionResult> {
+  const { merchantId, hashKey, hashIv } = requireCredentials(config);
+  if (!["C", "R", "E", "N"].includes(input.action)) {
+    throw new PaymentError(
+      "VALIDATION",
+      `ECPay DoAction Action 必須是 C|R|E|N（收到 "${input.action}"）`,
+      "ecpay",
+    );
+  }
+
+  let tradeNo = input.tradeNo;
+  let amount = input.amount;
+
+  if (!tradeNo || amount === undefined) {
+    const info = await queryTradeInfo(input.orderId);
+    if (info.PaymentType && !info.PaymentType.startsWith("Credit")) {
+      throw new PaymentError(
+        "VALIDATION",
+        `ECPay DoAction（${input.action}）僅支援信用卡`,
+        "ecpay",
+        { raw: info },
+      );
+    }
+    tradeNo = tradeNo ?? info.TradeNo;
+    amount = amount ?? asNumber(info.TradeAmt);
+  }
+
+  if (!tradeNo) {
+    throw new PaymentError("NOT_FOUND", `ECPay 查無訂單 ${input.orderId} 的 TradeNo`, "ecpay");
+  }
+  if (amount === undefined) {
+    throw new PaymentError("VALIDATION", "ECPay DoAction 需要金額（amount）", "ecpay");
+  }
+
+  const params: Record<string, string> = {
+    MerchantID: merchantId,
+    MerchantTradeNo: input.orderId,
+    TradeNo: tradeNo,
+    Action: input.action,
+    TotalAmount: String(Math.round(amount)),
+  };
+  params.CheckMacValue = computeCheckMacValue(params, hashKey, hashIv);
+
+  const text = await postForm(`${origin}/CreditDetail/DoAction`, params, "DoAction");
+  const parsed = Object.fromEntries(new URLSearchParams(text).entries());
+  verifyResponseMac(parsed, hashKey, hashIv);
+
+  const rtnCode = parsed.RtnCode ?? "";
+  if (rtnCode !== "1") {
+    throw new PaymentError(
+      "PROVIDER",
+      `ECPay DoAction(${input.action}) 失敗: ${parsed.RtnMsg ?? rtnCode}`,
+      "ecpay",
+      { rawCode: rtnCode, rawMessage: parsed.RtnMsg, raw: parsed },
+    );
+  }
+  return {
+    action: input.action,
+    tradeNo,
+    rtnCode,
+    rtnMsg: parsed.RtnMsg ?? "",
+    amount: Math.round(amount),
+    raw: parsed,
+  };
+}
+
+function parseCreditTradeResponse(text: string): EcpayCreditTradeDetail {
+  let json: unknown;
+  try {
+    json = JSON.parse(text) as unknown;
+  } catch {
+    throw new PaymentError("PROVIDER", "ECPay QueryCreditTrade 回應不是 JSON", "ecpay", {
+      raw: text,
+    });
+  }
+
+  const root = json as {
+    RtnMsg?: string;
+    RtnValue?: {
+      TradeID?: string | number;
+      amount?: string | number;
+      clsamt?: string | number;
+      authtime?: string;
+      status?: string;
+      close_data?: Array<Record<string, unknown>>;
+    };
+  };
+
+  const msg = root.RtnMsg ?? "";
+  if (msg === "error_Stop" || msg === "error_nopay" || msg === "error") {
+    throw new PaymentError("PROVIDER", `ECPay QueryCreditTrade 失敗: ${msg}`, "ecpay", {
+      rawCode: msg,
+      raw: json,
+    });
+  }
+  if (!root.RtnValue) {
+    throw new PaymentError(
+      "PROVIDER",
+      `ECPay QueryCreditTrade 查詢失敗${msg ? `: ${msg}` : ""}`,
+      "ecpay",
+      { raw: json },
+    );
+  }
+
+  const v = root.RtnValue;
+  const closeData = Array.isArray(v.close_data)
+    ? v.close_data.map((row) => ({
+        status: row.status !== undefined ? String(row.status) : undefined,
+        amount: asNumber(row.amount),
+        sno: row.sno !== undefined ? String(row.sno) : undefined,
+        datetime: row.datetime !== undefined ? String(row.datetime) : undefined,
+      }))
+    : [];
+
+  return {
+    tradeId: v.TradeID !== undefined ? String(v.TradeID) : undefined,
+    amount: asNumber(v.amount),
+    closedAmount: asNumber(v.clsamt),
+    authTime: v.authtime,
+    status: v.status,
+    closeData,
+    raw: json,
   };
 }
 
@@ -255,7 +458,7 @@ async function postForm(
   return text;
 }
 
-function requireCredentials(config: ProviderRuntimeConfig) {
+function requireCredentials(config: EcpayProviderConfig) {
   const { merchantId, hashKey, hashIv } = config;
   if (!merchantId || !hashKey || !hashIv) {
     throw new PaymentError("AUTH", "缺少 ECPay 憑證（MerchantID / HashKey / HashIV）", "ecpay");

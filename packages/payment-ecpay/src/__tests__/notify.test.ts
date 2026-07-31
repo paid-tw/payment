@@ -148,6 +148,29 @@ describe("verifyPaymentNotify", () => {
     expect(notify.success).toBe(true);
     expect(notify.merchantId).toBe(ECPAY_SANDBOX.merchantId);
   });
+
+  it("surfaces creditRefundId from gwsr (NeedExtraPaidInfo notify field)", () => {
+    const fields = {
+      MerchantID: "3002607",
+      MerchantTradeNo: "GW1",
+      RtnCode: "1",
+      RtnMsg: "交易成功",
+      SimulatePaid: "0",
+      TradeAmt: "100",
+      PaymentType: "Credit_CreditCard",
+      TradeNo: "T9",
+      PaymentDate: "2026/01/01 00:00:00",
+      TradeDate: "2026/01/01 00:00:00",
+      PaymentTypeChargeFee: "1",
+      gwsr: "13475885",
+    };
+    const body = {
+      ...fields,
+      CheckMacValue: computeCheckMacValue(fields, CREDS.hashKey, CREDS.hashIv),
+    };
+    const notify = verifyPaymentNotify(body, CREDS);
+    expect(notify.creditRefundId).toBe("13475885");
+  });
 });
 
 describe("ECPAY_NOTIFY_ACK", () => {

@@ -7,6 +7,12 @@ export type {
   EcpayProvider,
   EcpayCheckoutForm,
   EcpayRefundResult,
+  EcpayCreditAction,
+  EcpayCreditDoActionInput,
+  EcpayCreditDoActionResult,
+  EcpayCreditTradeQueryInput,
+  EcpayCreditTradeDetail,
+  EcpayCreditCloseRow,
 } from "./provider.js";
 export {
   ECPAY_ORIGINS,
@@ -14,6 +20,7 @@ export {
   ECPAY_SANDBOX_PORTAL,
   resolveEcpayOrigin,
 } from "./config.js";
+export type { EcpayProviderConfig } from "./config.js";
 export {
   ECPAY_NOTIFY_ACK,
   coerceNotifyBody,

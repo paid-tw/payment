@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw";
 import { setupServer } from "msw/node";
-import type { ProviderRuntimeConfig } from "@paid-tw/payment";
+import type { EcpayProviderConfig } from "../config.js";
 import { ECPAY_SANDBOX } from "../config.js";
 import { computeCheckMacValue, createEcpayProvider } from "../provider.js";
 import {
@@ -23,6 +23,7 @@ export const HASH_IV = ECPAY_SANDBOX.hashIv;
 
 export const QUERY_URL = `${BASE}/Cashier/QueryTradeInfo/V5`;
 export const DOACTION_URL = `${BASE}/CreditDetail/DoAction`;
+export const CREDIT_QUERY_URL = `${BASE}/CreditDetail/QueryTrade/V2`;
 export const AIO_CHECKOUT_URL = `${BASE}/Cashier/AioCheckOut/V5`;
 
 /** Serialize a QueryTradeInfo response and stamp a valid CheckMacValue over it. */
@@ -77,7 +78,7 @@ export const stageQueryHandlers = [
 
 export const server = setupServer(...stageQueryHandlers);
 
-export function testProvider(overrides: Partial<ProviderRuntimeConfig> = {}) {
+export function testProvider(overrides: Partial<EcpayProviderConfig> = {}) {
   return createEcpayProvider({
     merchantId: MERCHANT,
     hashKey: HASH_KEY,
@@ -88,7 +89,7 @@ export function testProvider(overrides: Partial<ProviderRuntimeConfig> = {}) {
 }
 
 /** Provider pointed at real stage hosts (for live tests). */
-export function stageProvider(overrides: Partial<ProviderRuntimeConfig> = {}) {
+export function stageProvider(overrides: Partial<EcpayProviderConfig> = {}) {
   return createEcpayProvider({
     merchantId: process.env.ECPAY_MERCHANT_ID ?? ECPAY_SANDBOX.merchantId,
     hashKey: process.env.ECPAY_HASH_KEY ?? ECPAY_SANDBOX.hashKey,

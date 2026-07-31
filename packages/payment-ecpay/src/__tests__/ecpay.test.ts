@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { computeCheckMacValue } from "../provider.js";
 import { PaymentError, supports } from "@paid-tw/payment";
 import {
+  CREDIT_QUERY_URL,
   DOACTION_URL,
   HASH_IV,
   HASH_KEY,
@@ -290,6 +291,7 @@ describe("ECPay createPayment (AioCheckOut)", () => {
     expect(form.params.EncryptType).toBe("1");
     expect(form.params.ReturnURL).toBe("https://shop.test/ecpay/notify");
     expect(form.params.OrderResultURL).toBe("https://shop.test/thanks");
+    expect(form.params.NeedExtraPaidInfo).toBe("Y");
     expect(form.params.MerchantTradeDate).toMatch(/^\d{4}\/\d{2}\/\d{2} \d{2}:\d{2}:\d{2}$/);
     // The stamped CheckMacValue must verify over the rest of the params.
     expect(form.params.CheckMacValue).toBe(computeCheckMacValue(form.params, HASH_KEY, HASH_IV));
@@ -426,6 +428,139 @@ describe("ECPay refundPayment (DoAction)", () => {
       .refundPayment({ orderId: "ORDER-R5" })
       .catch((e) => e);
     expect((err as PaymentError).code).toBe("NOT_FOUND");
+  });
+});
+
+describe("ECPay creditDoAction (C/E/N)", () => {
+  const stubQuery = (fields: Record<string, string>) =>
+    http.post(QUERY_URL, () => HttpResponse.text(queryResponse(fields)));
+
+  const paidCredit = {
+    MerchantTradeNo: "ORDER-C1",
+    TradeNo: "2303120099",
+    TradeAmt: "1000",
+    PaymentType: "Credit_CreditCard",
+    TradeStatus: "1",
+  };
+
+  it("capturePayment sends Action=C", async () => {
+    let body: Record<string, string> | undefined;
+    server.use(
+      stubQuery(paidCredit),
+      http.post(DOACTION_URL, async ({ request }) => {
+        body = Object.fromEntries(new URLSearchParams(await request.text()).entries());
+        return HttpResponse.text(
+          queryResponse({
+            MerchantTradeNo: "ORDER-C1",
+            TradeNo: "2303120099",
+            RtnCode: "1",
+            RtnMsg: "OK",
+          }),
+        );
+      }),
+    );
+    const result = await testProvider().capturePayment({ orderId: "ORDER-C1" });
+    expect(result.action).toBe("C");
+    expect(body?.Action).toBe("C");
+    expect(body?.TotalAmount).toBe("1000");
+  });
+
+  it("cancelClose sends Action=E and abandonPayment sends Action=N", async () => {
+    const actions: string[] = [];
+    server.use(
+      stubQuery(paidCredit),
+      http.post(DOACTION_URL, async ({ request }) => {
+        const b = Object.fromEntries(new URLSearchParams(await request.text()).entries());
+        actions.push(b.Action ?? "");
+        return HttpResponse.text(queryResponse({ TradeNo: "2303120099", RtnCode: "1", RtnMsg: "OK" }));
+      }),
+    );
+    const p = testProvider();
+    await p.cancelClose({ orderId: "ORDER-C1", tradeNo: "2303120099", amount: 1000 });
+    await p.abandonPayment({ orderId: "ORDER-C1", tradeNo: "2303120099", amount: 1000 });
+    expect(actions).toEqual(["E", "N"]);
+  });
+
+  it("creditDoAction accepts an explicit tradeNo without querying", async () => {
+    let queried = false;
+    let body: Record<string, string> | undefined;
+    server.use(
+      http.post(QUERY_URL, () => {
+        queried = true;
+        return HttpResponse.text("should-not-hit");
+      }),
+      http.post(DOACTION_URL, async ({ request }) => {
+        body = Object.fromEntries(new URLSearchParams(await request.text()).entries());
+        return HttpResponse.text(queryResponse({ TradeNo: "T-SKIP", RtnCode: "1", RtnMsg: "OK" }));
+      }),
+    );
+    await testProvider().creditDoAction({
+      orderId: "ORDER-X",
+      action: "C",
+      tradeNo: "T-SKIP",
+      amount: 50,
+    });
+    expect(queried).toBe(false);
+    expect(body?.TradeNo).toBe("T-SKIP");
+    expect(body?.Action).toBe("C");
+  });
+});
+
+describe("ECPay queryCreditTrade", () => {
+  it("posts CreditDetail/QueryTrade/V2 and normalizes RtnValue", async () => {
+    let body: Record<string, string> | undefined;
+    server.use(
+      http.post(CREDIT_QUERY_URL, async ({ request }) => {
+        body = Object.fromEntries(new URLSearchParams(await request.text()).entries());
+        return HttpResponse.json({
+          RtnMsg: "",
+          RtnValue: {
+            TradeID: "0015625112",
+            amount: "100",
+            clsamt: "100",
+            authtime: "2016/5/12 下午 07:09:17",
+            status: "已關帳",
+            close_data: [
+              { status: "已關帳", sno: "2782343", amount: "100", datetime: "2016/5/12 下午 08:00:00" },
+            ],
+          },
+        });
+      }),
+    );
+
+    const detail = await testProvider({ creditCheckCode: "62861749" }).queryCreditTrade({
+      creditRefundId: 13475885,
+      amount: 100,
+    });
+
+    expect(body?.CreditRefundId).toBe("13475885");
+    expect(body?.CreditAmount).toBe("100");
+    expect(body?.CreditCheckCode).toBe("62861749");
+    expect(body?.CheckMacValue).toBe(computeCheckMacValue(body!, HASH_KEY, HASH_IV));
+    expect(detail.status).toBe("已關帳");
+    expect(detail.tradeId).toBe("0015625112");
+    expect(detail.amount).toBe(100);
+    expect(detail.closedAmount).toBe(100);
+    expect(detail.closeData).toHaveLength(1);
+    expect(detail.closeData[0]?.sno).toBe("2782343");
+  });
+
+  it("requires creditCheckCode", async () => {
+    const err = await testProvider()
+      .queryCreditTrade({ creditRefundId: 1, amount: 100 })
+      .catch((e) => e);
+    expect((err as PaymentError).code).toBe("AUTH");
+  });
+
+  it("maps RtnMsg error tokens to PROVIDER", async () => {
+    server.use(
+      http.post(CREDIT_QUERY_URL, () => HttpResponse.json({ RtnMsg: "error_nopay", RtnValue: null })),
+    );
+    const err = await testProvider({ creditCheckCode: "1" })
+      .queryCreditTrade({ creditRefundId: 9, amount: 10 })
+      .catch((e) => e);
+    expect((err as PaymentError).code).toBe("PROVIDER");
+    expect((err as PaymentError).rawCode).toBe("error_nopay");
   });
 });
 

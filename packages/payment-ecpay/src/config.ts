@@ -1,3 +1,5 @@
+import type { ProviderRuntimeConfig } from "@paid-tw/payment";
+
 /**
  * ECPay payment gateway hosts (All-in-One Cashier).
  * Selected by `sandbox` / `baseUrl` on the provider config.
@@ -6,6 +8,18 @@ export const ECPAY_ORIGINS = {
   sandbox: "https://payment-stage.ecpay.com.tw",
   production: "https://payment.ecpay.com.tw",
 } as const;
+
+/**
+ * Runtime config for {@link import("./provider.js").createEcpayProvider}.
+ * Extends the shared {@link ProviderRuntimeConfig} with ECPay-only fields.
+ */
+export interface EcpayProviderConfig extends ProviderRuntimeConfig {
+  /**
+   * 商家檢查碼 — required for {@link import("./provider.js").EcpayProvider.queryCreditTrade}.
+   * Found in vendor console: 信用卡收單 → 信用卡授權資訊.
+   */
+  creditCheckCode?: string | number;
+}
 
 /**
  * ECPay's **public shared stage merchant** for payment integration tests.
