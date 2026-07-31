@@ -1,0 +1,50 @@
+{
+  "name": "@paid-tw/payment-ecpay",
+  "version": "0.1.0",
+  "description": "ECPay 綠界 adapter for @paid-tw/payment — AioCheckOut, QueryTradeInfo, DoAction refund.",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/paid-tw/payment.git",
+    "directory": "packages/payment-ecpay"
+  },
+  "homepage": "https://github.com/paid-tw/payment/tree/main/packages/payment-ecpay#readme",
+  "bugs": "https://github.com/paid-tw/payment/issues",
+  "type": "module",
+  "sideEffects": false,
+  "files": ["dist"],
+  "main": "./dist/index.cjs",
+  "module": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      },
+      "require": {
+        "types": "./dist/index.d.cts",
+        "default": "./dist/index.cjs"
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsdown",
+    "dev": "tsdown --watch",
+    "typecheck": "tsc --noEmit",
+    "test": "vitest run --config ../../vitest.config.ts src",
+    "test:msw": "vitest run --config ../../vitest.config.ts src/__tests__/ecpay.test.ts",
+    "test:live": "ECPAY_LIVE=1 vitest run --config ../../vitest.config.ts src/__tests__/ecpay-live.test.ts"
+  },
+  "dependencies": {
+    "@paid-tw/payment": "workspace:*"
+  },
+  "devDependencies": {
+    "tsdown": "^0.22.3",
+    "typescript": "^5.6.0"
+  },
+  "keywords": ["payment", "ecpay", "綠界", "taiwan", "金流"],
+  "publishConfig": {
+    "access": "public"
+  }
+}
