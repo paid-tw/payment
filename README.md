@@ -1,5 +1,12 @@
 # payment-tw
 
+[![CI](https://github.com/paid-tw/payment/actions/workflows/ci.yml/badge.svg)](https://github.com/paid-tw/payment/actions/workflows/ci.yml)
+[![npm](https://img.shields.io/npm/v/@paid-tw/payment.svg?label=%40paid-tw%2Fpayment)](https://www.npmjs.com/package/@paid-tw/payment)
+[![npm ecpay](https://img.shields.io/npm/v/@paid-tw/payment-ecpay.svg?label=%40paid-tw%2Fpayment-ecpay)](https://www.npmjs.com/package/@paid-tw/payment-ecpay)
+[![types: TypeScript](https://img.shields.io/npm/types/@paid-tw/payment.svg)](https://www.typescriptlang.org/)
+[![license: MIT](https://img.shields.io/github/license/paid-tw/payment.svg)](./LICENSE)
+[![Node.js](https://img.shields.io/node/v/@paid-tw/payment.svg)](https://nodejs.org/)
+
 統一的**台灣金流 SDK**。一套與供應商無關的 `PaymentProvider` 介面，搭配多家閘道轉接器 —— 在 PAYUNi、藍新、綠界等之間切換，不需重寫商業邏輯。
 
 對齊 [`@paid-tw/einvoice`](https://github.com/paid-tw/einvoice) 的 monorepo 形狀：core + per-provider packages。
