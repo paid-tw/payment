@@ -18,7 +18,10 @@
     "directory": "packages/payment-ecpay"
   },
   "files": [
-    "dist"
+    "dist",
+    "CHANGELOG.md",
+    "README.md",
+    "LICENSE"
   ],
   "type": "module",
   "sideEffects": false,
