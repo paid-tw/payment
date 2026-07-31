@@ -46,3 +46,9 @@ export type {
 export { ECPG_ORIGINS, resolveEcpgOrigin } from "./ecpg/config.js";
 export type { EcpgProviderConfig } from "./ecpg/config.js";
 export { encryptData, decryptData, aesEncrypt, aesDecrypt } from "./ecpg/aes.js";
+export { verifyEcpgPaymentNotify, ECPG_NOTIFY_ACK } from "./ecpg/notify.js";
+export type {
+  EcpgNotifyCredentials,
+  EcpgNotifyEnvelope,
+  EcpgPaymentNotify,
+} from "./ecpg/notify.js";

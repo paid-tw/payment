@@ -11,6 +11,11 @@ import {
 } from "@paid-tw/payment";
 import { ecpgPost } from "./client.js";
 import { type EcpgProviderConfig, resolveEcpgOrigin } from "./config.js";
+import {
+  type EcpgNotifyEnvelope,
+  type EcpgPaymentNotify,
+  verifyEcpgPaymentNotify,
+} from "./notify.js";
 
 const CAPABILITIES: ReadonlySet<Capability> = new Set<Capability>(["CREATE_PAYMENT"]);
 
@@ -84,6 +89,13 @@ export interface EcpayEcpgProvider extends PaymentProvider {
   createPayment(input: EcpgCreatePaymentInput): Promise<EcpgTokenResult>;
   /** CreatePayment with browser PayToken (after JS getPayToken). */
   createPaymentWithPayToken(input: EcpgCreateWithPayTokenInput): Promise<EcpgCreatePaymentResult>;
+  /**
+   * Verify ReturnURL JSON notify (AES-decrypt Data).
+   * Respond with {@link import("./notify.js").ECPG_NOTIFY_ACK} (`1|OK`).
+   */
+  verifyPaymentNotify(
+    input: EcpgNotifyEnvelope | string | Record<string, unknown>,
+  ): EcpgPaymentNotify;
 }
 
 /**
@@ -243,6 +255,13 @@ export function createEcpayEcpgProvider(config: EcpgProviderConfig): EcpayEcpgPr
       });
 
       return normalizeCreatePaymentResult(decoded);
+    },
+
+    verifyPaymentNotify(
+      input: EcpgNotifyEnvelope | string | Record<string, unknown>,
+    ): EcpgPaymentNotify {
+      const { merchantId, hashKey, hashIv } = requireCredentials(config);
+      return verifyEcpgPaymentNotify(input, { merchantId, hashKey, hashIv });
     },
 
     async getPayment(_input: GetPaymentRequest): Promise<NormalizedPaymentData> {

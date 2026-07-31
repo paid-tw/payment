@@ -116,6 +116,15 @@ const paid = await ecpg.createPaymentWithPayToken({
   merchantTradeNo,
 });
 // paid.threeDUrl? → full-page 3DS; or atm/cvs take-number fields
+
+// 4) ReturnURL — JSON + AES Data（與 AIO form CheckMac 不同）
+app.post("/ecpay/ecpg/notify", (req, res) => {
+  const notify = ecpg.verifyPaymentNotify(req.body);
+  if (notify.success && !notify.simulated) {
+    // mark paid (idempotent on notify.merTradeNo)
+  }
+  res.type("text/plain").send(ECPG_NOTIFY_ACK); // "1|OK"
+});
 ```
 
 前端 JS 與樣式不在此 Node SDK 範圍內，請依綠界站內付 2.0 Web 文件載入官方 SDK。

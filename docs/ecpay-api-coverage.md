@@ -96,7 +96,7 @@ See [ecpay-provider-separation.md](./ecpay-provider-separation.md).
 | `GetTokenbyBindingCard.php` | | ❌ |
 | `Capture.php` | `ecpayment-stage…/1.0.0/Credit/DoAction` **AES JSON** | ❌ (different host/crypto than AIO form DoAction) |
 | `QueryTrade` / `QueryCreditTrade` / `QueryPaymentInfo` / `QueryTradeMedia` / period | ECPG query family | ❌ |
-| `GetResponse.php` / notify verify | AES JSON response verify | ❌ |
+| `GetResponse.php` / notify verify | AES JSON response verify | ✅ `verifyEcpgPaymentNotify` / `ECPG_NOTIFY_ACK` |
 | Frontend `WebJS.html` + `ECPay.createPayment` | browser SDK | 🔌 document only (out of Node SDK scope) |
 
 ### ECPG server flow (must implement for “完整站內付”)
@@ -150,7 +150,7 @@ Capabilities to add later:
 
 6. ~~AES JSON + GetToken + CreatePayment~~ — done under `src/ecpg/*`, factory `createEcpayEcpgProvider`.  
 7. Live tests against ecpg-stage (when merchant has ECPG enabled) — open.  
-8. Notify verify for AES callbacks — open.  
+8. ~~Notify verify for AES callbacks~~ — done (`verifyEcpgPaymentNotify`).  
 9. README frontend JS steps — partial (README + separation doc).  
 
 ### P3 — long tail
