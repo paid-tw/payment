@@ -77,6 +77,25 @@ export type {
   EcpayPayCodeNotifyEnvelope,
 } from "./paycode/notify.js";
 
+// 信用卡查詢 — shared by 站內付 2.0 and 幕後授權, which document the same endpoints twice.
+// Exported at the root because neither takes card data: 單筆明細 takes order ids, and
+// 發卡行 takes a 6-9 digit BIN prefix.
+export { queryEcpayCreditDetail, queryEcpayCardInfo } from "./credit/queries.js";
+export type {
+  EcpayCardInfoInput,
+  EcpayCardIssuerInfo,
+  EcpayCreditCloseRecord,
+  EcpayCreditDetail,
+  EcpayCreditDetailInput,
+} from "./credit/queries.js";
+export {
+  ECPAY_CREDIT_ORIGINS,
+  ECPAY_CREDIT_PATHS,
+  ECPAY_SANDBOX_GATEWAY,
+  resolveCreditOrigin,
+} from "./credit/config.js";
+export type { EcpayCreditQueryConfig } from "./credit/config.js";
+
 // 信用卡幕後授權 (BackAuth) is deliberately **not** exported here.
 //
 // It is the only adapter that accepts a raw card number, and it lives behind its own

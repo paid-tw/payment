@@ -197,8 +197,45 @@ different paths: `2000132` (3D off) authorizes directly, `3002607` (3D on) retur
   幕後取號 table — error tables must stay per-service
 - `IssuingBank` is English on stage; `ChargeFee` fractional; `ProcessFee` present
 
-Not implemented: `QueryCardInfo`, `CreditDetail/QueryTrade`, 定期定額 management,
-and the BackAuth-side `QueryTradeMedia`.
+Not implemented: 定期定額 management (`CreditCardPeriodAction`) and the BackAuth-side
+`QueryTradeMedia`.
+
+---
+
+## 信用卡查詢 — one surface, documented twice
+
+**Status: landed** as standalone functions in `src/credit/*`, exported from the package
+**root** (neither takes card data: 單筆明細 takes order ids, 發卡行 takes a 6-9 digit BIN
+prefix), and mirrored as methods on the 幕後授權 provider for convenience.
+
+The important structural finding: ECPG and 幕後授權 **document the same `ecpayment`
+endpoints twice**, so these are not two implementations.
+
+| Doc                                                                                                         | Endpoint                                | Note                                                                                             |
+| ----------------------------------------------------------------------------------------------------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------ |
+| ECPG [9088](https://developers.ecpay.com.tw/9088) + 幕後授權 [45925](https://developers.ecpay.com.tw/45925) | `/1.0.0/CreditDetail/QueryTrade`        | same endpoint, two doc trees                                                                     |
+| 幕後授權 [49623](https://developers.ecpay.com.tw/49623)                                                     | `/1.0.0/Credit/QueryCardInfo`           | 閘道商-only                                                                                      |
+| ECPG [9093](https://developers.ecpay.com.tw/9093) 定期定額查詢                                              | `/1.0.0/Cashier/QueryTrade`             | **already the endpoint** paycode/BackAuth call — a response-shape difference, not a new endpoint |
+| ECPG [12130](https://developers.ecpay.com.tw/12130) 定期定額作業                                            | `/1.0.0/Cashier/CreditCardPeriodAction` | open                                                                                             |
+
+Stage-verified 2026-08-01 across **three** published merchants (`2000132` no-3D,
+`3002607` with-3D, `3085779` 閘道商). Deviations found, documented in
+`credit-fixtures.ts`:
+
+- **`CloseData` is a top-level sibling of `RtnValue`, not nested inside it** — reading
+  it from `RtnValue`, as the doc's layout suggests, yields an empty list forever
+- **failure arrives as an `RtnCode` the doc never mentions** (`10000185`), while the doc
+  describes a different protocol entirely (`RtnMsg` = `error_Stop`/`error_nopay`/`error`);
+  success carries _neither_ — `RtnMsg: ""` and no RtnCode at all
+- an unknown order, a non-credit order and a wrong-merchant order are **indistinguishable**
+  (all 10000185)
+- field casing is PascalCase here but snake/lowercase on the AIO form transport
+- **zero-padding a BIN prefix is not semantically neutral** despite the doc telling you
+  to pad: digits 7-9 select a co-branded product
+- 查詢發卡行 is 閘道商-only (`5000095`), and an unknown BIN returns a generic `RtnCode: 0`
+
+Not stage-reachable, so doc-derived and labelled: a **captured** order (`CloseData` as a
+populated array), because capture needs `Credit/DoAction`, which stage does not expose.
 
 ---
 
