@@ -206,13 +206,23 @@ export function verifyZingalaConfirmRequest(
     assertApiKey(headers.apiKey, credentials.apiKey);
   }
 
+  // `JSON.parse` happily returns null, an array, or a bare string — and reading
+  // `.order_id` off null throws a TypeError rather than a PaymentError. Guard the shape,
+  // the same way verifyZingalaNotify does.
   let data: Record<string, unknown>;
   try {
-    data = JSON.parse(rawBody) as Record<string, unknown>;
+    const parsed: unknown = JSON.parse(rawBody);
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      throw new Error("not an object");
+    }
+    data = parsed as Record<string, unknown>;
   } catch (cause) {
-    throw new PaymentError("PROVIDER", `${MESSAGE_PREFIX} comfirm_url 內容不是 JSON`, PROVIDER, {
-      cause,
-    });
+    throw new PaymentError(
+      "PROVIDER",
+      `${MESSAGE_PREFIX} comfirm_url 內容不是 JSON 物件`,
+      PROVIDER,
+      { cause },
+    );
   }
 
   const orderId = text(data.order_id);

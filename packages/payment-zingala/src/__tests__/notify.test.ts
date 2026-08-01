@@ -256,6 +256,17 @@ describe("verifyZingalaConfirmRequest", () => {
     expect(err.message).toContain("order_id");
   });
 
+  it.each(["null", "[]", '"a string"', "42", "true"])(
+    "rejects the valid-JSON-but-not-an-object body %s",
+    (body) => {
+      // `JSON.parse("null")` returns null, and reading `.order_id` off it throws a
+      // TypeError instead of a PaymentError — so the caller's error handling never sees it.
+      const err = caught(() => verifyZingalaConfirmRequest(body, { apiKey: TEST_API_KEY }, CREDS));
+      expect(err.code).toBe("PROVIDER");
+      expect(err.message).toContain("不是 JSON 物件");
+    },
+  );
+
   it("rejects a non-JSON body", () => {
     const err = caught(() => verifyZingalaConfirmRequest("nope", { apiKey: TEST_API_KEY }, CREDS));
     expect(err.code).toBe("PROVIDER");
