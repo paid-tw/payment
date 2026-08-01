@@ -14,11 +14,7 @@ Implements `PaymentProvider` with:
 ## Usage
 
 ```ts
-import {
-  createEcpayProvider,
-  ECPAY_SANDBOX,
-  ECPAY_NOTIFY_ACK,
-} from "@paid-tw/payment-ecpay";
+import { createEcpayProvider, ECPAY_SANDBOX, ECPAY_NOTIFY_ACK } from "@paid-tw/payment-ecpay";
 
 const ecpay = createEcpayProvider({
   ...ECPAY_SANDBOX, // or your production credentials
@@ -127,10 +123,7 @@ const form = await ecpay.createPayment({
 時）綠界就會把虛擬帳號／繳費代碼／條碼 server-post 給你：
 
 ```ts
-import {
-  verifyEcpayPaymentInfoNotify,
-  ECPAY_NOTIFY_ACK,
-} from "@paid-tw/payment-ecpay";
+import { verifyEcpayPaymentInfoNotify, ECPAY_NOTIFY_ACK } from "@paid-tw/payment-ecpay";
 
 app.post("/ecpay/paid-info", (req, res) => {
   const info = verifyEcpayPaymentInfoNotify(req.body, {
@@ -363,10 +356,7 @@ import { createEcpayBackAuthProvider } from "@paid-tw/payment-ecpay/backauth";
 
 ```ts
 // 注意 import 路徑：BackAuth 在 /backauth subpath，不在套件根目錄
-import {
-  createEcpayBackAuthProvider,
-  ECPAY_SANDBOX_NO_3D,
-} from "@paid-tw/payment-ecpay/backauth";
+import { createEcpayBackAuthProvider, ECPAY_SANDBOX_NO_3D } from "@paid-tw/payment-ecpay/backauth";
 
 const backauth = createEcpayBackAuthProvider({ ...ECPAY_SANDBOX_NO_3D });
 
