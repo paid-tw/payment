@@ -266,7 +266,14 @@ Capabilities to add later:
 
 1. ~~**`verifyPaymentNotify`**~~ — done (`notify.ts`, PHP + doc goldens).
 2. ~~create result `mode: "redirect"`~~ — done on `EcpayCheckoutForm`.
-3. Expand `ChoosePayment` mapping: BARCODE, WebATM, ApplePay, TWQR, BNPL (and optional `IgnorePayment` when ALL). → still open (P0.5 / with method enum)
+3. ~~Reach the rest of the AIO **parameter** surface~~ — done: `createPayment` takes the
+   13 typed common optional fields plus a `params` escape hatch signed into the
+   CheckMacValue, so every AIO _field_ is reachable without enumerating methods.
+   **Choosing a payment method is a separate question and still open** — see below.
+4. ~~`PaymentInfoURL` / `ClientRedirectURL` + 取號結果通知~~ — done
+   (`verifyEcpayPaymentInfoNotify`). ⚠️ 取號成功 is `RtnCode 2` (ATM) / `10100073`
+   (CVS/BARCODE), so the payment-result verifier reports a successful 取號 as a failure —
+   which is why it is a separate function.
 
 ### P1 — AIO credit lifecycle
 
@@ -307,6 +314,28 @@ Capabilities to add later:
   chain-specific; the 對帳檔 is Excel-armoured CSV with a 13th undocumented column.
 - A truly-paid notify (`TradeStatus: "1"` + 繳費門市) still needs a real
   convenience-store payment; that one fixture stays doc-derived.
+
+---
+
+### ApplePay / TWQR / BNPL / WeiXin — still unreachable, by two separate blockers
+
+⚠️ These are **not** currently selectable, and an earlier draft of this doc wrongly said
+they were reachable via `params: { ChoosePayment: … }`. They are not: `ChoosePayment` is
+derived from `method` and is deliberately refused in `params`, so a passthrough attempt
+throws. Copilot caught the contradiction on PR #5.
+
+Two independent blockers:
+
+1. **No way to express them.** `ChoosePayment` comes from the core `PaymentMethod` union
+   (`card` / `linepay` / `atm` / `cvs` / `barcode`), which does not include them. Enabling
+   them means either widening that shared union or adding an AIO-only typed
+   `choosePayment` override — a public-API decision, not something to slip in.
+2. **They cannot be stage-verified even then.** ApplePay needs a device plus a merchant
+   certificate, BNPL needs 裕富/中租 onboarding, WeiXin is cross-border, TWQR needs 歐付寶
+   activation. Every one also needs merchant activation in production.
+
+Blocker 2 is the reason not to rush blocker 1: shipping typed wrappers would mean
+doc-derived fixtures only, which no other adapter in this package relies on.
 
 ---
 

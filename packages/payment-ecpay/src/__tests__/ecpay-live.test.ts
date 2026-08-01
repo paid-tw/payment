@@ -67,6 +67,67 @@ describe.skipIf(!live)("ECPay live — public stage merchant 3002607", LIVE_OPTS
     }
   });
 
+  it("a passthrough order is really created, and the extra fields reach ECPay", async () => {
+    // A locally-valid MAC proves nothing about acceptance, so this posts the form to the
+    // real cashier and then queries the order back. The echoed StoreID/CustomField1 are
+    // the evidence that the typed fields and the params escape hatch actually landed.
+    const orderId = `AIOX${Date.now().toString().slice(-11)}`;
+    const form = await provider.createPayment({
+      amount: 321,
+      currency: "TWD",
+      method: "atm",
+      orderId,
+      itemDesc: "paid-tw passthrough probe",
+      notifyUrl: "https://example.com/ecpay/notify",
+      paymentInfoUrl: "https://example.com/ecpay/paid-info",
+      clientRedirectUrl: "https://example.com/ecpay/code",
+      storeId: "S1",
+      customField1: "c1",
+      params: { ExpireDate: 7 },
+    });
+
+    expect(form.params.PaymentInfoURL).toBe("https://example.com/ecpay/paid-info");
+    expect(form.params.ExpireDate).toBe("7");
+    // Independently re-sign: the MAC must cover the passthrough.
+    const { CheckMacValue: signature, ...signedFields } = form.params;
+    expect(signature).toBe(
+      computeCheckMacValue(signedFields, ECPAY_SANDBOX.hashKey, ECPAY_SANDBOX.hashIv),
+    );
+
+    const response = await fetch(form.action, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: new URLSearchParams(form.params).toString(),
+      redirect: "manual",
+    });
+    expect(response.status).toBeLessThan(500);
+
+    const data = await provider.getPayment({ merTradeNo: orderId });
+    if (process.env.PAID_DEBUG === "1") {
+      console.error("[ecpay-live] passthrough order:", JSON.stringify(data.raw, null, 2));
+    }
+    expect(data.status).toBe("unpaid");
+    expect(data.amount).toBe(321);
+    const raw = data.raw as Record<string, string>;
+    expect(raw.StoreID).toBe("S1");
+    expect(raw.CustomField1).toBe("c1");
+  });
+
+  it("refuses to override a signed field through params, before any network call", async () => {
+    for (const key of ["MerchantID", "TotalAmount", "CheckMacValue"]) {
+      await expect(
+        provider.createPayment({
+          amount: 100,
+          currency: "TWD",
+          method: "atm",
+          orderId: "AIOGUARD01",
+          notifyUrl: "https://example.com/ecpay/notify",
+          params: { [key]: "evil" },
+        }),
+      ).rejects.toMatchObject({ code: "VALIDATION" });
+    }
+  });
+
   it("getPayment for a non-existent order → NOT_FOUND (10200047) with verified MAC", async () => {
     // Stage always returns a full field set + CheckMacValue even for misses.
     const id = process.env.ECPAY_QUERY_ID ?? `probe${Date.now().toString().slice(-10)}`;
