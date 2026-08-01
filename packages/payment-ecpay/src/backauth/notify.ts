@@ -30,8 +30,11 @@ export type EcpayBackAuthNotifyEnvelope = EcpgNotifyEnvelope;
  * `{ mode: "3ds" }`, the authorization result only reaches you here (and, for the
  * browser, at `OrderResultURL`). Ship on `success && !simulated`.
  *
- * `creditRefundId` carries `CardInfo.Gwsr`, which is the handle
- * `creditDoAction` needs for 關帳/退刷 — persist it.
+ * Persist `tradeNo` (綠界交易編號): that — **not** `gwsr` — is what
+ * {@link import("./provider.js").EcpayBackAuthProvider.creditDoAction} needs for
+ * 關帳/退刷. `creditRefundId` carries `CardInfo.Gwsr`, the bank authorization
+ * reference, which 信用卡單筆明細查詢 uses (not implemented in this adapter) and which
+ * is useful for reconciliation — but DoAction does not accept it.
  *
  * @see https://developers.ecpay.com.tw/45907
  */

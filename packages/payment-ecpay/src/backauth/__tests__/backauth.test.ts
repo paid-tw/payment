@@ -588,9 +588,12 @@ describe("Credit/DoAction — production only", () => {
 });
 
 describe("verifyPaymentNotify — closes the 3DS branch", () => {
-  it("verifies an authorization notify and surfaces gwsr for later 請退款", () => {
+  it("verifies an authorization notify and surfaces the handles worth persisting", () => {
     // When createPayment returned mode:"3ds", this notify is where the result
-    // actually arrives — and CardInfo.Gwsr is the handle creditDoAction needs.
+    // actually arrives. `tradeNo` is the handle creditDoAction needs; `gwsr`
+    // (creditRefundId) is the bank authorization reference, which DoAction does NOT
+    // accept — doc 45919's request is MerchantID/MerchantTradeNo/TradeNo/Action/
+    // TotalAmount only.
     const notify = {
       MerchantID: MERCHANT,
       TransCode: 1,
@@ -620,6 +623,9 @@ describe("verifyPaymentNotify — closes the 3DS branch", () => {
     expect(result.success).toBe(true);
     expect(result.simulated).toBe(false);
     expect(result.method).toBe("card");
+    // What DoAction actually needs:
+    expect(result.tradeNo).toBe("2608010930520281");
+    // Available, but not a DoAction input:
     expect(result.creditRefundId).toBe("14521552");
     expect(result.card).toMatchObject({ authCode: "777777", card4No: "2222" });
   });

@@ -90,7 +90,12 @@ export type EcpayBackAuthCreateInput = CreatePaymentRequest & EcpayBackAuthField
 /** Masked card + bank data ECPay returns. Never contains the full PAN. */
 export interface EcpayAuthCardInfo {
   authCode?: string;
-  /** 銀行授權碼 (gwsr) — the handle 請退款 needs. */
+  /**
+   * 銀行授權碼 (gwsr) — the bank's authorization reference.
+   *
+   * **Not** what 請退款 takes: `creditDoAction` needs `tradeNo` (綠界交易編號). This is
+   * the handle for 信用卡單筆明細查詢 (not implemented here) and for reconciliation.
+   */
   gwsr?: number;
   processDate?: string;
   amount?: number;

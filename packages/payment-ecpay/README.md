@@ -278,7 +278,13 @@ if (result.mode === "3ds") {
 sandbox 設定下 adapter 會直接丟 `UNSUPPORTED`，不會發一個註定 404 的請求。
 
 `refundPayment()` 需要你自己帶 `tradeNo`（綠界交易編號），不會偷偷先查一次 —— 退款
-路徑上多一次查詢值得講清楚。`gwsr` 從授權結果或 notify 的 `creditRefundId` 拿。
+路徑上多一次查詢值得講清楚。`tradeNo` 從授權結果（`result.tradeNo`）或 notify
+（`notify.tradeNo`）拿，**請保存它**。
+
+⚠️ 別跟 `gwsr` 搞混：`gwsr`（notify 的 `creditRefundId`）是銀行授權碼，DoAction
+**不吃這個欄位**（文件 45919 的請求參數只有 MerchantID / MerchantTradeNo / TradeNo /
+Action / TotalAmount）。`gwsr` 是「信用卡單筆明細查詢」和對帳用的，那支 API 本 adapter
+尚未實作。
 
 ### 測試卡與測試特店
 
