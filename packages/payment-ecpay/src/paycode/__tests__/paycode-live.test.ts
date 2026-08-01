@@ -1,13 +1,12 @@
 import { describe, expect, it } from "vitest";
 import { isPaymentError, type PaymentError } from "@paid-tw/payment";
-import { ECPAY_SANDBOX } from "../../config.js";
 import { ECPAY_PAYCODE_ORIGINS } from "../config.js";
 import { stageProvider } from "./paycode-server.js";
 
 /**
  * Live tests against **ecpayment-stage** (非信用卡幕後取號) using ECPay's public test
  * merchant — the same MerchantID/HashKey/HashIV as the AIO and ECPG live tests
- * (see {@link ECPAY_SANDBOX}; published by ECPay, not secrets).
+ * (`ECPAY_SANDBOX` in `src/config.ts`; published by ECPay, not secrets).
  *
  * Enable with:
  *   ECPAY_LIVE=1 pnpm test:live:ecpay:paycode

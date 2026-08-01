@@ -4,13 +4,16 @@ Sources (official):
 
 - [全方位金流 API 技術文件](https://developers.ecpay.com.tw/?p=2509) — AIO redirect cashier
 - [站內付 2.0 Web](https://developers.ecpay.com.tw/?p=8972) — embedded payment (ECPG)
+- [非信用卡幕後取號 API](https://developers.ecpay.com.tw/27950) — server-side ATM/CVS/BARCODE 取號
+- [ECPay-API-Skill `references/` + `test-vectors/`](https://github.com/ECPay/ECPay-API-Skill) — every doc page as markdown (append `.md` to a page id, e.g. `28005.md`), plus official AES/CMV goldens
 - [SDK_PHP `example/Payment/Aio`](https://github.com/ECPay/SDK_PHP/tree/master/example/Payment/Aio)
 - [SDK_PHP `example/Payment/Ecpg`](https://github.com/ECPay/SDK_PHP/tree/master/example/Payment/Ecpg)
 - [ECPayAIO_Python `sample/`](https://github.com/ECPay/ECPayAIO_Python/tree/master/sample)
 
-Package today: `@paid-tw/payment-ecpay` implements a **subset of 全方位金流 (AIO)** only.
+Package today: `@paid-tw/payment-ecpay` implements a subset of **全方位金流 (AIO)**, the
+core **站內付 2.0 (ECPG)** path, and the **非信用卡幕後取號** create + query + notify path.
 
-## Two product lines (do not mix)
+## Three product lines (do not mix)
 
 |                         | 全方位金流 **AIO**                                               | 站內付 2.0 **ECPG**                                                                                      |
 | ----------------------- | ---------------------------------------------------------------- | -------------------------------------------------------------------------------------------------------- |
@@ -22,6 +25,20 @@ Package today: `@paid-tw/payment-ecpay` implements a **subset of 全方位金流
 | PCI                     | Card data never on merchant (cashier hosted)                     | Card UI hosted by ECPay JS (no PCI-DSS for merchant)                                                     |
 | Official PHP samples    | `example/Payment/Aio/*`                                          | `example/Payment/Ecpg/*`                                                                                 |
 | Official Python samples | `ECPayAIO_Python/sample/*`                                       | (not in AIO_Python repo)                                                                                 |
+
+Plus a third line, **非信用卡幕後取號** (`ecpayment(-stage).ecpay.com.tw`): the AES-JSON
+envelope of ECPG, but no browser step at all — the create response _is_ the payment
+code. Credit card has its own sibling (幕後授權 `BackAuth`), not implemented.
+
+|              | 非信用卡幕後取號                                                              |
+| ------------ | ----------------------------------------------------------------------------- |
+| Docs         | [27950](https://developers.ecpay.com.tw/27950)                                |
+| UX           | none — merchant delivers the code (email/SMS/own page)                        |
+| Host (stage) | `ecpayment-stage.ecpay.com.tw`                                                |
+| Wire format  | same AES-JSON envelope as ECPG (`RqHeader` = `Timestamp` only, no `Revision`) |
+| Create flow  | one call: `POST /1.0.0/Cashier/GenPaymentCode`                                |
+| Methods      | ATM 虛擬帳號 / CVS 超商代碼 / BARCODE 超商條碼 (no card)                      |
+| Refund       | **none** — ECPay ships no refund API for these; 廠商後台 by hand              |
 
 **Implication for our monorepo:** keep AIO and ECPG as separate modules (or clear subpaths), e.g.
 
@@ -112,6 +129,33 @@ Crypto stack ≠ AIO CheckMacValue: PHP uses `PostWithAesJsonResponseService` (A
 
 ---
 
+## 非信用卡幕後取號 — coverage
+
+**Status: create + query + notify landed** as `createEcpayPayCodeProvider`
+(`name: "ecpay-paycode"`), under `src/paycode/*`, reusing `src/ecpg/{aes,client,notify}.ts`.
+
+| Doc                                                                              | Endpoint (`ecpayment(-stage)…`)        | Status                                                     |
+| -------------------------------------------------------------------------------- | -------------------------------------- | ---------------------------------------------------------- |
+| [幕後取號 虛擬帳號 / 超商代碼 / 超商條碼](https://developers.ecpay.com.tw/28005) | `POST /1.0.0/Cashier/GenPaymentCode`   | ✅ `createPayment` → `mode: "paycode"` (all three methods) |
+| [付款結果通知](https://developers.ecpay.com.tw/28010)                            | ReturnURL (AES-JSON in, `1\|OK` out)   | ✅ `verifyPaymentNotify` / `ECPAY_PAYCODE_NOTIFY_ACK`      |
+| [查詢訂單](https://developers.ecpay.com.tw/28020)                                | `POST /1.0.0/Cashier/QueryTrade`       | ✅ `getPayment`                                            |
+| [查詢 ATM/CVS/BARCODE 取號結果](https://developers.ecpay.com.tw/28025)           | `POST /1.0.0/Cashier/QueryPaymentInfo` | ✅ `getPaymentCode`                                        |
+| [超商代碼 CVS 轉三段式條碼](https://developers.ecpay.com.tw/39086)               | `POST /1.0.0/Cashier/QueryCVSBarcode`  | ❌                                                         |
+| [下載撥款對帳檔](https://developers.ecpay.com.tw/41186)                          | `POST /1.0.0/Cashier/QueryTradeMedia`  | ❌                                                         |
+| 退款                                                                             | —                                      | 🚫 no API exists; `refundPayment` throws `UNSUPPORTED`     |
+
+Stage-verified 2026-08-01 against merchant 3002607 (`paycode-live.test.ts`), with the
+real payloads recorded into `paycode-fixtures.ts`. Deviations from the docs found
+while recording — duplicate order is `RtnCode 10300028` (not AIO's `10200047`),
+missing order is `10000185` under `TransCode: 1`, `ChargeFee` is fractional,
+`Barcode1` is not numeric, `QueryTrade`'s `ATMInfo` is the payer not the account —
+are documented in that fixtures file.
+
+Not implemented (sibling product, same host): **信用卡幕後授權** `BackAuth` /
+`Credit/DoAction` / `CreditCardPeriodAction` / `QueryCardInfo`.
+
+---
+
 ## Mapping to `@paid-tw/payment` core
 
 | Core method                                | AIO today                          | ECPG (planned)                                                                                |
@@ -165,7 +209,22 @@ Capabilities to add later:
 | --------------------------------------------- | ------------------------------- | ----------------------------------------- |
 | AIO create methods (Python samples)           | ~14 create variants             | ~4 (ALL/Credit/ATM/CVS via ChoosePayment) |
 | AIO ops (query/refund/period/download/notify) | ~8                              | 2 (query + refund R)                      |
-| ECPG samples                                  | ~25+ files/dirs                 | 0                                         |
-| Crypto primitives                             | CMV + AES JSON                  | CMV only                                  |
+| ECPG samples                                  | ~25+ files/dirs                 | 3 (GetToken + CreatePayment + notify)     |
+| 幕後取號 endpoints                            | 6                               | 4 (GenPaymentCode + 2 queries + notify)   |
+| Crypto primitives                             | CMV + AES JSON                  | both (AES pinned to ECPay's own vectors)  |
 
-**Conclusion:** AIO **core path** (create redirect + query + credit refund R + MAC) is solid and stage-tested. Coverage is **not** complete against ECPay’s full surface: missing notify verification, full DoAction set, many payment methods/params, and the entire **站內付 2.0 / ECPG** stack.
+### P2.5 — 非信用卡幕後取號
+
+- ~~GenPaymentCode (ATM/CVS/BARCODE) + QueryTrade + QueryPaymentInfo + notify~~ — done
+  under `src/paycode/*`, stage-verified 2026-08-01.
+- QueryCVSBarcode (三段式條碼) and QueryTradeMedia (撥款對帳檔) — open.
+- Record a real ReturnURL notify (needs a public tunnel + 廠商後台 模擬付款); notify
+  fixtures are currently doc-derived from 28010.
+
+---
+
+**Conclusion:** three paths are stage-tested — AIO core (create redirect + query +
+credit refund R + MAC), ECPG core (GetToken + CreatePayment + notify), and
+非信用卡幕後取號 (取號 + both queries + notify). Coverage is still **not** complete
+against ECPay's full surface: 信用卡幕後授權, most ECPG card-on-file/period APIs,
+reconcile downloads, and many AIO payment methods/params remain missing.

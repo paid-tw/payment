@@ -1,7 +1,7 @@
 {
   "name": "@paid-tw/payment-ecpay",
   "version": "0.1.0",
-  "description": "ECPay 綠界 adapter for @paid-tw/payment — AIO (redirect) + 站內付 2.0 ECPG (token).",
+  "description": "ECPay 綠界 adapter for @paid-tw/payment — AIO (redirect) + 站內付 2.0 ECPG (token) + 非信用卡幕後取號 (ATM/CVS/BARCODE).",
   "keywords": [
     "ecpay",
     "payment",

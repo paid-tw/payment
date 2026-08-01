@@ -277,7 +277,7 @@ describe("GenPaymentCode — request validation", () => {
   it("accepts an ExpireDate that is only valid for that method", async () => {
     const seen = captureGen(GEN_CVS);
     await testProvider().createPayment({ ...base, method: "cvs", expireDate: 43_200 });
-    expect((seen.body?.CVSInfo as Record<string, unknown>).ExpireDate).toBe(43_200);
+    expect(seen.body?.CVSInfo).toMatchObject({ ExpireDate: 43_200 });
   });
 
   it("rejects more than four CVS description lines", async () => {
@@ -437,6 +437,31 @@ describe("QueryTrade — getPayment", () => {
     });
   });
 
+  it("keeps an unknown PaymentType verbatim instead of collapsing it", async () => {
+    // ECPay adds payment types over time; mapping an unseen one to "unknown" would
+    // silently discard information the caller can still act on.
+    server.use(
+      respondWith(QUERY_TRADE_URL, {
+        ...QUERY_TRADE_UNPAID,
+        OrderInfo: { ...QUERY_TRADE_UNPAID.OrderInfo, PaymentType: "TWQR" },
+      }),
+    );
+    const data = await testProvider().getPayment({ merTradeNo: STAGE_QUERY_MER_TRADE_NO });
+    expect(data.method).toBe("TWQR");
+  });
+
+  it("reports an absent PaymentType as unknown", async () => {
+    server.use(
+      respondWith(QUERY_TRADE_URL, {
+        ...QUERY_TRADE_UNPAID,
+        OrderInfo: { MerchantTradeNo: STAGE_QUERY_MER_TRADE_NO, TradeStatus: "0" },
+      }),
+    );
+    const data = await testProvider().getPayment({ merTradeNo: STAGE_QUERY_MER_TRADE_NO });
+    expect(data.method).toBe("unknown");
+    expect(data.amount).toBeUndefined();
+  });
+
   it("keeps an unknown TradeStatus verbatim instead of guessing", async () => {
     server.use(
       respondWith(QUERY_TRADE_URL, {
@@ -474,11 +499,33 @@ describe("QueryPaymentInfo — getPaymentCode", () => {
     expect(JSON.stringify(info)).not.toContain('"null"');
   });
 
-  it("infers the method from PaymentType when the caller did not pick one", async () => {
-    server.use(respondWith(QUERY_INFO_URL, GEN_BARCODE));
-    const info = await testProvider().getPaymentCode({ merTradeNo: "PCBAR85542625818" });
-    expect(info.method).toBe("barcode");
-    expect(info.barcode?.barcode2).toBe("1557352207269145");
+  it.each([
+    ["barcode", GEN_BARCODE],
+    ["cvs", GEN_CVS],
+    ["atm", GEN_ATM],
+  ] as const)(
+    "infers method %s from PaymentType when the caller did not pick one",
+    async (expected, payload) => {
+      server.use(respondWith(QUERY_INFO_URL, payload));
+      const info = await testProvider().getPaymentCode({ merTradeNo: "WHATEVER" });
+      expect(info.method).toBe(expected);
+    },
+  );
+
+  it("falls back to whichever Info object is populated when PaymentType is unusable", async () => {
+    // QueryPaymentInfo documents all three Info keys; if ECPay ever omits or renames
+    // PaymentType we must still label the code we actually got, not guess "atm".
+    server.use(
+      respondWith(QUERY_INFO_URL, {
+        RtnCode: 1,
+        RtnMsg: "Success!",
+        OrderInfo: { MerchantTradeNo: "PCX", PaymentType: "SomethingNew", TradeStatus: "0" },
+        CVSInfo: { PaymentNo: "LLL26213917389", ExpireDate: "2026/08/05 12:03:43" },
+      }),
+    );
+    const info = await testProvider().getPaymentCode({ merTradeNo: "PCX" });
+    expect(info.method).toBe("cvs");
+    expect(info.cvs?.paymentNo).toBe("LLL26213917389");
   });
 
   it("propagates NOT_FOUND from the query family", async () => {

@@ -419,7 +419,7 @@ function assertRtnOk(decoded: Record<string, unknown>, label: string): void {
   const rtnCode = Number(decoded.RtnCode);
   if (TAKE_NUMBER_OK.has(rtnCode)) return;
 
-  const rawCode = decoded.RtnCode !== undefined ? String(decoded.RtnCode) : undefined;
+  const rawCode = str(decoded.RtnCode) || undefined;
   const rtnMsg = str(decoded.RtnMsg);
   const mapped = rawCode ? RTN_ERRORS[rawCode] : undefined;
   // Keep ECPay's own wording — it is more specific than our label, and the labels
@@ -574,9 +574,18 @@ function asRecord(input: unknown): Record<string, unknown> {
   return input !== null && typeof input === "object" ? (input as Record<string, unknown>) : {};
 }
 
+/**
+ * Coerce a JSON scalar to a string, collapsing anything else (including the JSON
+ * `null`s QueryTrade sends for an unpaid order's `ATMAccBank`/`ATMAccNo`) to `""`.
+ * A bare `String()` would turn those into the literal `"null"` and leak it into
+ * normalized output.
+ */
 function str(input: unknown): string {
-  if (input === null || input === undefined) return "";
-  return typeof input === "object" ? "" : String(input);
+  if (typeof input === "string") return input;
+  if (typeof input === "number" || typeof input === "boolean" || typeof input === "bigint") {
+    return String(input);
+  }
+  return "";
 }
 
 function asNumber(input: unknown): number | undefined {
