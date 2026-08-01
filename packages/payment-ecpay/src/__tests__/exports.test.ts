@@ -28,6 +28,14 @@ describe("package entry points", () => {
     expect(rootEntry).toHaveProperty("createEcpayPayCodeProvider");
   });
 
+  it("exports the credit queries at the root, since neither takes card data", () => {
+    // 單筆明細 takes order ids; 發卡行 takes a 6-9 digit BIN prefix. Putting them behind
+    // the raw-PAN subpath would force a card-free app to import that surface.
+    expect(rootEntry).toHaveProperty("queryEcpayCreditDetail");
+    expect(rootEntry).toHaveProperty("queryEcpayCardInfo");
+    expect(rootEntry).toHaveProperty("ECPAY_SANDBOX_GATEWAY");
+  });
+
   it("exposes the BackAuth surface on the subpath instead", () => {
     expect(backauthEntry).toHaveProperty("createEcpayBackAuthProvider");
     expect(backauthEntry).toHaveProperty("verifyEcpayBackAuthNotify");

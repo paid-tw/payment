@@ -19,6 +19,7 @@ import {
 } from "./backauth-fixtures.js";
 import {
   AUTH_URL,
+  BASE,
   DOACTION_URL,
   envelope,
   HASH_IV,
@@ -689,6 +690,38 @@ describe("Credit/DoAction — production only", () => {
       amount: 199,
     });
     expect(seen.body).toMatchObject({ Action: "R", TotalAmount: 199 });
+  });
+});
+
+describe("credit queries reachable from the provider", () => {
+  it("delegates queryCreditDetail to the shared implementation", async () => {
+    server.use(
+      http.post(`${BASE}/1.0.0/CreditDetail/QueryTrade`, () =>
+        HttpResponse.json(
+          envelope({
+            RtnMsg: "",
+            RtnValue: { TradeID: 14_521_552, Amount: 199, ClsAmt: 0, Status: "Authorized" },
+            CloseData: {},
+          }),
+        ),
+      ),
+    );
+    const detail = await testProvider().queryCreditDetail({ merTradeNo: "BAOK85547852370" });
+    expect(detail).toMatchObject({ tradeId: "14521552", status: "Authorized" });
+    expect(detail.closeData).toEqual([]);
+  });
+
+  it("delegates queryCardInfo, and surfaces the gateway-only failure", async () => {
+    server.use(
+      http.post(`${BASE}/1.0.0/Credit/QueryCardInfo`, () =>
+        HttpResponse.json(
+          envelope({ RtnCode: 5_000_095, RtnMsg: "Only support gateway merchantID" }),
+        ),
+      ),
+    );
+    await expect(testProvider().queryCardInfo({ cardNoPrefix: "431195222" })).rejects.toMatchObject(
+      { code: "UNSUPPORTED", rawCode: "5000095" },
+    );
   });
 });
 

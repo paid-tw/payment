@@ -9,6 +9,14 @@ import {
   type PaymentProvider,
   type RefundPaymentRequest,
 } from "@paid-tw/payment";
+import {
+  type EcpayCardInfoInput,
+  type EcpayCardIssuerInfo,
+  type EcpayCreditDetail,
+  type EcpayCreditDetailInput,
+  queryEcpayCardInfo,
+  queryEcpayCreditDetail,
+} from "../credit/queries.js";
 import { ecpgPost } from "../ecpg/client.js";
 import { asNumber, str, text } from "../scalars.js";
 import {
@@ -240,6 +248,21 @@ export interface EcpayBackAuthProvider extends PaymentProvider {
    * `PaymentProvider` type can still reach this method without the narrowing.
    */
   refundPayment(input: EcpayBackAuthRefundInput): Promise<EcpayBackAuthDoActionResult>;
+  /**
+   * 查詢信用卡單筆明細紀錄 — the authorization/capture history behind an order.
+   *
+   * Delegates to the shared {@link queryEcpayCreditDetail}; offered here because this
+   * adapter already points at the `ecpayment` host the endpoint lives on. Callers not
+   * using BackAuth should import that function directly rather than constructing a
+   * provider just to reach it.
+   */
+  queryCreditDetail(input: EcpayCreditDetailInput): Promise<EcpayCreditDetail>;
+  /**
+   * 查詢信用卡發卡行 from a **BIN prefix** (6-9 digits, never a full card number).
+   *
+   * ⚠️ 閘道商-only: an ordinary merchant gets `UNSUPPORTED` (RtnCode 5000095).
+   */
+  queryCardInfo(input: EcpayCardInfoInput): Promise<EcpayCardIssuerInfo>;
   /** Verify a ReturnURL notify; respond with the ACK string. */
   verifyPaymentNotify(
     input: EcpayBackAuthNotifyEnvelope | string | Record<string, unknown>,
@@ -453,6 +476,16 @@ export function createEcpayBackAuthProvider(
         action: "R",
         amount: input.amount,
       });
+    },
+
+    async queryCreditDetail(input: EcpayCreditDetailInput): Promise<EcpayCreditDetail> {
+      assertSupports(PROVIDER, capabilities, "GET_PAYMENT");
+      return queryEcpayCreditDetail(config, input);
+    },
+
+    async queryCardInfo(input: EcpayCardInfoInput): Promise<EcpayCardIssuerInfo> {
+      assertSupports(PROVIDER, capabilities, "GET_PAYMENT");
+      return queryEcpayCardInfo(config, input);
     },
 
     verifyPaymentNotify(

@@ -21,6 +21,7 @@
     "test:live:ecpay": "ECPAY_LIVE=1 vitest run packages/payment-ecpay/src/__tests__/ecpay-live.test.ts",
     "test:live:ecpay:paycode": "ECPAY_LIVE=1 vitest run packages/payment-ecpay/src/paycode/__tests__/paycode-live.test.ts",
     "test:live:ecpay:backauth": "ECPAY_LIVE=1 vitest run packages/payment-ecpay/src/backauth/__tests__/backauth-live.test.ts",
+    "test:live:ecpay:credit": "ECPAY_LIVE=1 vitest run packages/payment-ecpay/src/credit/__tests__/credit-live.test.ts",
     "capture:ecpay-notify": "unrun scripts/ecpay-notify-capture.mjs",
     "lint": "oxlint --type-aware",
     "format": "oxfmt --write",
