@@ -226,7 +226,7 @@ describe.skipIf(!live)("ECPay 幕後取號 live — stage merchant 3002607", LIV
     }
 
     // 13 columns, one more than doc 41186 lists.
-    const header = result.csv.split(/\r?\n/)[0].split(",");
+    const header = (result.csv.split(/\r?\n/)[0] ?? "").split(",");
     expect(header.length).toBeGreaterThanOrEqual(12);
     expect(result.csv).toContain("金流處理費");
   });

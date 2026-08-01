@@ -242,12 +242,12 @@ describe("Credit/QueryCardInfo", () => {
   });
 
   it.each([
-    ["43119", "too short"],
-    ["4311952222222222", "a full card number"],
-    ["43119a", "non-digits"],
-    ["", "empty"],
-    ["4311952229", "10 digits"],
-  ] as const)("rejects %s (%s) locally", async (prefix) => {
+    { prefix: "43119", why: "too short" },
+    { prefix: "4311952222222222", why: "a full card number" },
+    { prefix: "43119a", why: "non-digits" },
+    { prefix: "", why: "empty" },
+    { prefix: "4311952229", why: "10 digits" },
+  ] as const)("rejects $prefix ($why) locally", async ({ prefix }) => {
     const err = await caught(queryEcpayCardInfo(config, { cardNoPrefix: prefix }));
     expect(err.code).toBe("VALIDATION");
     expect(err.message).toMatch(/6-9 碼數字/);

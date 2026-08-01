@@ -18,7 +18,7 @@ import { HASH_IV, HASH_KEY, MERCHANT } from "./ecpay-server.js";
 const credentials = { hashKey: HASH_KEY, hashIv: HASH_IV, merchantId: MERCHANT };
 
 /** Build a signed body, the way ECPay would. */
-function signed(fields: Record<string, string>): Record<string, string> {
+function signed<T extends Record<string, string>>(fields: T): T & { CheckMacValue: string } {
   return { ...fields, CheckMacValue: computeCheckMacValue(fields, HASH_KEY, HASH_IV) };
 }
 
