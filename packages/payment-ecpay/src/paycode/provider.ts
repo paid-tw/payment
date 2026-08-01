@@ -119,7 +119,12 @@ export interface EcpayPayCodeResult {
   merTradeNo: string;
   tradeNo?: string;
   amount?: number;
-  /** `"unpaid"` | `"paid"`, from TradeStatus. Fresh 取號 is always `"unpaid"`. */
+  /**
+   * `"unpaid"` (TradeStatus `"0"`) or `"paid"` (`"1"`) — a fresh 取號 is always
+   * `"unpaid"`. Any other TradeStatus is passed through verbatim, and `"unknown"`
+   * stands in when the field is absent, so treat this as an open string: ECPay adds
+   * states over time and collapsing them would discard information.
+   */
   status: string;
   tradeDate?: string;
   paidAt?: string;
@@ -538,7 +543,11 @@ function requireCredentials(config: EcpayPayCodeProviderConfig) {
   return { merchantId, hashKey, hashIv };
 }
 
-/** TradeStatus for a real order: 0 = 訂單成立未付款, 1 = 已付款. */
+/**
+ * TradeStatus for a real order: `0` = 訂單成立未付款, `1` = 已付款. Anything else is
+ * returned as-is (`"unknown"` when absent) rather than forced into the two known
+ * states — see {@link EcpayPayCodeResult.status}.
+ */
 function mapTradeStatus(value: string): string {
   switch (value) {
     case "1":
