@@ -9,7 +9,7 @@
 
 統一的**台灣金流 SDK**。一套與供應商無關的 `PaymentProvider` 介面，搭配多家閘道轉接器 —— 在 PAYUNi、藍新、綠界等之間切換，不需重寫商業邏輯。
 
-抽象是照類別切的，不是硬套所有東西：付款閘道走 `PaymentProvider`，而**核貸型的 BNPL 不走**（[理由在下面](#bnpl-為什麼不套-paymentprovider)）。
+抽象是照類別切的：付款閘道共用 `PaymentProvider`，核貸型的無卡分期（BNPL）則有自己的一組介面 —— 見 [BNPL：另一種形狀](#bnpl另一種形狀)。
 
 對齊 [`@paid-tw/einvoice`](https://github.com/paid-tw/einvoice) 的 monorepo 形狀：core + per-provider packages。
 
@@ -21,7 +21,7 @@
 | [`@paid-tw/payment-ecpay`](./packages/payment-ecpay)       | ECPay 綠界 — 四條產品線、四個 factory（見下）                               |
 | [`@paid-tw/payment-payuni`](./packages/payment-payuni)     | PAYUNi 統一金流 — 目前只有 trade query；create / refund 會丟 `UNSUPPORTED`  |
 | [`@paid-tw/payment-newebpay`](./packages/payment-newebpay) | NewebPay 藍新 — scaffold                                                    |
-| [`@paid-tw/payment-zingala`](./packages/payment-zingala)   | 中租零卡分期 — BNPL，**刻意不是** `PaymentProvider`（見下）                 |
+| [`@paid-tw/payment-zingala`](./packages/payment-zingala)   | 中租零卡分期 — 無卡分期（BNPL）：核貸流程，另一組介面（見下）               |
 
 只需安裝你會用到的供應商。**core 永不依賴 adapters**；由 CLI / app compose。
 
@@ -69,18 +69,13 @@ const data = await payments.getPayment({ merTradeNo: "ORDER123" });
 - 覆蓋矩陣：[`docs/ecpay-api-coverage.md`](./docs/ecpay-api-coverage.md)
 - 為什麼分成四個 factory：[`docs/ecpay-provider-separation.md`](./docs/ecpay-provider-separation.md)
 
-## BNPL 為什麼不套 `PaymentProvider`
+## BNPL：另一種形狀
 
-`@paid-tw/payment-zingala`（中租零卡分期）**沒有**實作 `PaymentProvider`，這是刻意的。無卡分期是**核貸流程**，不是付款授權：
+`@paid-tw/payment-zingala`（中租零卡分期）不實作 `PaymentProvider`，因為它的流程不一樣：刷卡是當下授權，無卡分期是**核貸**——送出申請後有審核、可能婉拒，核准後還要等撥款。`status` 只有 paid / unpaid 的話，「審核中」和「已核准未撥款」沒地方放。
 
-```
-reserve_ec → 消費者申請 → 轉專員審核 → 核准 → 請款 → 撥款
-   001         002          003      004    005
-```
+所以它的方法名照核貸流程走（`applyInstallment` 開的是一份信用申請），而且多了其他 adapter 都沒有的一件事：**中租會反過來呼叫你**（通知審核結果、詢問訂單是否仍有效）。用法見 [`packages/payment-zingala/README.md`](./packages/payment-zingala/README.md)。
 
-「成功」的終點是**已撥款**，而那是核准後好幾天的事。硬塞進 `createPayment` / `getPayment`，`status` 就得對「待審核」和「已撥款」說謊。所以它的方法名照核貸流程命名（`applyInstallment` 開的是一份信用申請），並且多了一件其他 adapter 都沒有的事：**中租會反過來呼叫你**（審核結果通知，以及「這筆訂單還有效嗎」）。
-
-跨供應商的 `BnplProvider` 共用契約**還沒定** —— 目前只有中租一家有實錄資料，只憑一家推出來的「通用介面」實際上就是這一家換個通用名字。等第二家（AFTEE／oppay）的真實流程進來再抽。
+跨供應商的共用 BNPL 介面（中租／AFTEE／oppay）是目標但還沒定 —— 目前只有一家有實錄資料，只憑一家推出來的抽象就只是這一家換個名字。
 
 ## 開發
 
