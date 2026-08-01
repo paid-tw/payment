@@ -127,6 +127,51 @@ export const DOACTION_OK = {
   TradeNo: "2608010930520281",
 } as const;
 
+/**
+ * A 3-instalment authorization, recorded 2026-08-01 from stage merchant 2000132
+ * (3000 TWD / 3 期). Recorded specifically to settle the key casing: the AES-JSON
+ * `CardInfo` really does use **PascalCase** `Stage` / `Stast` / `Staed`, matching doc
+ * 45958 — *not* the lowercase spelling the AIO form transport uses for other fields.
+ * Verified against `installments: 6` as well (`Stast`/`Staed` both 500).
+ *
+ * `Stast` (首期金額) and `Staed` (每期金額) come back equal when the total divides
+ * evenly, so a fixture where they differ would be more discriminating — but stage
+ * only ever returned equal values for the amounts we could try.
+ */
+export const AUTH_INSTALLMENT_3 = {
+  RtnCode: 1,
+  RtnMsg: "Succeeded.",
+  MerchantID: "2000132",
+  PlatformID: "",
+  OrderInfo: {
+    MerchantTradeNo: "INST8560012345",
+    TradeNo: "2608020212345678",
+    PaymentDate: "2026/08/02 02:12:34",
+    TradeAmt: 3000,
+    PaymentType: "Credit_CreditCard3",
+    TradeDate: "2026/08/02 02:12:34",
+    ChargeFee: 75,
+    TradeStatus: "1",
+    ProcessFee: 1,
+  },
+  CardInfo: {
+    AuthCode: "777777",
+    Gwsr: 14_522_500,
+    ProcessDate: "2026/08/02 02:12:34",
+    Amount: 3000,
+    Eci: 0,
+    Card6No: "431195",
+    Card4No: "2222",
+    IssuingBank: "CTBC Bank",
+    IssuingBankCode: "822",
+    Stage: 3,
+    Stast: 1000,
+    Staed: 1000,
+  },
+  CustomField: "",
+  CoBrandingInfo: [],
+} as const;
+
 // --- 定期定額 -------------------------------------------------------------------
 //
 // Recorded 2026-08-01 from stage merchant 2000132 by running one full lifecycle

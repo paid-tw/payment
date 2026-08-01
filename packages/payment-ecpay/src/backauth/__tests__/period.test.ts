@@ -5,6 +5,7 @@ import { ECPAY_SANDBOX_NO_3D } from "../config.js";
 import { ECPAY_BACKAUTH_NOTIFY_ACK, verifyEcpayPeriodNotify } from "../notify.js";
 import type { EcpayBackAuthCreateInput } from "../provider.js";
 import {
+  AUTH_INSTALLMENT_3,
   PERIOD_CANCEL_SUCCESS,
   PERIOD_CREATE_SUCCESS,
   PERIOD_QUERY_ACTIVE,
@@ -469,5 +470,34 @@ describe("定期定額 cycle notify", () => {
   it("acks with the same 1|OK the one-off notify uses", () => {
     // A cycle notify that is not acked is retried, so this must not drift.
     expect(ECPAY_BACKAUTH_NOTIFY_ACK).toBe("1|OK");
+  });
+});
+
+describe("分期 (installments) card fields", () => {
+  it("reads Stage / Stast / Staed in the PascalCase the API really sends", async () => {
+    // Recorded from stage, not derived from the doc: these three are PascalCase in the
+    // AES-JSON transport, unlike the lowercase spellings the AIO form transport uses
+    // elsewhere. Getting the casing wrong drops the fields silently.
+    server.use(respondWith(AUTH_URL, AUTH_INSTALLMENT_3));
+    const result = await testProvider().createPayment(base({ period: undefined, installments: 3 }));
+
+    if (result.mode !== "authorized") throw new Error(`expected authorized, got ${result.mode}`);
+    expect(result.card).toMatchObject({ installments: 3, firstAmount: 1000, eachAmount: 1000 });
+  });
+
+  it("leaves the instalment fields undefined on a one-off authorization", async () => {
+    server.use(respondWith(AUTH_URL, PERIOD_CREATE_SUCCESS));
+    const result = await testProvider().createPayment(base({ period: undefined }));
+
+    if (result.mode !== "authorized") throw new Error(`expected authorized, got ${result.mode}`);
+    expect(result.card?.installments).toBeUndefined();
+    expect(result.card?.firstAmount).toBeUndefined();
+    expect(result.card?.eachAmount).toBeUndefined();
+  });
+
+  it("sends CreditInstallment as the plain period count", async () => {
+    const seen = capture(AUTH_URL, AUTH_INSTALLMENT_3);
+    await testProvider().createPayment(base({ period: undefined, installments: 3 }));
+    expect(cardInfoOf(seen).CreditInstallment).toBe("3");
   });
 });
