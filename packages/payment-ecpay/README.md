@@ -197,4 +197,22 @@ ATM 天數傳，會拿到完全不同期限的帳號。超過 30 天需另向綠
 - 條碼只回三段號碼，不回圖檔，需自行轉 Code39。`barcode1` 不是純數字
   （實測 `1508086CY`）。
 
+### 錄製真實的付款通知
+
+通知沒辦法用測試觸發——綠界只在真的有人繳費、或有人在後台按「模擬付款」時才發，
+而且只發到公開可達的 HTTPS 網址。要重新錄製：
+
+```bash
+pnpm capture:ecpay-notify                        # :8787，收到就解密印出，並回 "1|OK"
+cloudflared tunnel --url http://localhost:8787   # 另一個 shell，取得公開 URL
+```
+
+然後把 `notifyUrl` 指向該 URL 取號，再到
+[vendor-stage](https://vendor-stage.ecpay.com.tw) 的
+**一般訂單查詢 → 全方位金流訂單** 找到那筆訂單按「模擬付款」。腳本印出來的內容可以
+直接貼進 `paycode-fixtures.ts`。
+
+⚠️ 模擬付款**不會**產生 `TradeStatus: "1"`，也不會帶繳費門市——那個形狀只有真的去
+超商繳費才拿得到。
+
 完整缺口表：[`docs/ecpay-api-coverage.md`](../../docs/ecpay-api-coverage.md)。

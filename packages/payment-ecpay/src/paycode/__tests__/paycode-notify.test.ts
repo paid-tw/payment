@@ -18,12 +18,12 @@ import { HASH_IV, HASH_KEY, MERCHANT, testProvider } from "./paycode-server.js";
  * How they were recorded, since it needs a public URL and cannot be scripted end
  * to end:
  *
- *   1. Run a local server that logs the raw POST body and answers `1|OK`.
+ *   1. `pnpm capture:ecpay-notify` — logs each POST, decrypts `Data`, answers `1|OK`.
  *   2. Expose it over HTTPS (`cloudflared tunnel --url http://localhost:8787`).
  *   3. 取號 one order per method with `notifyUrl` pointing at the tunnel.
  *   4. Log into vendor-stage.ecpay.com.tw, 一般訂單查詢 → 全方位金流訂單, find each
  *      order and click 模擬付款.
- *   5. AES-decrypt each captured `Data` and paste it into `paycode-fixtures.ts`.
+ *   5. Paste what the capture script printed into `paycode-fixtures.ts`.
  *
  * Still doc-derived, and marked as such below: a **genuinely paid** notify
  * (`TradeStatus: "1"`, with `PayStoreID`/`PayStoreName`). 模擬付款 deliberately does

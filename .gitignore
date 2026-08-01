@@ -6,3 +6,6 @@ coverage
 .env
 .env.*
 !.env.example
+
+# Captured ECPay ReturnURL notifies (scripts/ecpay-notify-capture.mjs)
+*.jsonl
