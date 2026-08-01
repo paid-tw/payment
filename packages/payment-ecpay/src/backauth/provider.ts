@@ -23,11 +23,34 @@ import {
   verifyEcpayBackAuthNotify,
 } from "./notify.js";
 
-const CAPABILITIES: ReadonlySet<Capability> = new Set<Capability>([
-  "CREATE_PAYMENT",
-  "GET_PAYMENT",
-  "REFUND_PAYMENT",
-]);
+/**
+ * Always available. `REFUND_PAYMENT` is added per instance — see
+ * {@link resolveCapabilities}.
+ */
+const BASE_CAPABILITIES: readonly Capability[] = ["CREATE_PAYMENT", "GET_PAYMENT"];
+
+/**
+ * Capabilities are **per instance**, not per adapter, because refunds genuinely do
+ * not exist on stage: ECPay does not expose `Credit/DoAction` there at all.
+ *
+ * `supports(provider, cap)` is this project's feature-detection contract, so a
+ * sandbox-configured provider that advertised `REFUND_PAYMENT` would make the guard
+ * lie — `if (supports(p, "REFUND_PAYMENT")) await p.refundPayment(...)` would still
+ * throw. Reporting the capability the instance actually has keeps the guard honest.
+ */
+function resolveCapabilities(
+  config: EcpayBackAuthProviderConfig,
+  origin: string,
+): ReadonlySet<Capability> {
+  const capabilities = new Set<Capability>(BASE_CAPABILITIES);
+  if (!isSandboxOrigin(config, origin)) capabilities.add("REFUND_PAYMENT");
+  return capabilities;
+}
+
+/** Sandbox either by explicit flag or by a `baseUrl` pointing at the stage host. */
+function isSandboxOrigin(config: EcpayBackAuthProviderConfig, origin: string): boolean {
+  return config.baseUrl ? origin === ECPAY_BACKAUTH_ORIGINS.sandbox : Boolean(config.sandbox);
+}
 
 const PROVIDER = "ecpay-backauth";
 const MESSAGE_PREFIX = "ECPay 幕後授權";
@@ -211,6 +234,7 @@ export function createEcpayBackAuthProvider(
   config: EcpayBackAuthProviderConfig,
 ): EcpayBackAuthProvider {
   const origin = resolveBackAuthOrigin(config);
+  const capabilities = resolveCapabilities(config, origin);
 
   async function post(
     path: string,
@@ -283,10 +307,10 @@ export function createEcpayBackAuthProvider(
 
   return {
     name: PROVIDER,
-    capabilities: CAPABILITIES,
+    capabilities,
 
     async createPayment(input: EcpayBackAuthCreateInput): Promise<EcpayBackAuthResult> {
-      assertSupports(PROVIDER, CAPABILITIES, "CREATE_PAYMENT");
+      assertSupports(PROVIDER, capabilities, "CREATE_PAYMENT");
       const { merchantId } = requireCredentials(config);
       const card = assertCreateInput(input);
 
@@ -341,7 +365,7 @@ export function createEcpayBackAuthProvider(
     },
 
     async getPayment(input: GetPaymentRequest): Promise<NormalizedPaymentData> {
-      assertSupports(PROVIDER, CAPABILITIES, "GET_PAYMENT");
+      assertSupports(PROVIDER, capabilities, "GET_PAYMENT");
       const { merchantId } = requireCredentials(config);
       if (!input.merTradeNo) {
         throw new PaymentError(
@@ -373,7 +397,9 @@ export function createEcpayBackAuthProvider(
     creditDoAction: doAction,
 
     async refundPayment(input: RefundPaymentRequest & { tradeNo?: string }): Promise<unknown> {
-      assertSupports(PROVIDER, CAPABILITIES, "REFUND_PAYMENT");
+      // Redundant with assertDoActionAvailable below, but keeps the capability guard
+      // and the runtime behaviour in agreement for callers that feature-detect.
+      assertSupports(PROVIDER, capabilities, "REFUND_PAYMENT");
       if (!input.tradeNo) {
         throw new PaymentError(
           "VALIDATION",
@@ -546,10 +572,7 @@ function normalizeCard(card: EcpayCardDetails): EcpayCardDetails {
 
 /** ECPay does not expose DoAction on stage at all, so fail before the network call. */
 function assertDoActionAvailable(config: EcpayBackAuthProviderConfig, origin: string): void {
-  const isSandbox = config.baseUrl
-    ? origin === ECPAY_BACKAUTH_ORIGINS.sandbox
-    : Boolean(config.sandbox);
-  if (isSandbox) {
+  if (isSandboxOrigin(config, origin)) {
     throw new PaymentError(
       "UNSUPPORTED",
       `${MESSAGE_PREFIX} Credit/DoAction 僅正式環境提供（綠界測試環境無法提供實際授權，` +

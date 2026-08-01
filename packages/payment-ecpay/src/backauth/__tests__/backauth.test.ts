@@ -1,6 +1,6 @@
 import { http, HttpResponse } from "msw";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { PaymentError as PaymentErrorClass } from "@paid-tw/payment";
+import { PaymentError as PaymentErrorClass, supports } from "@paid-tw/payment";
 import type { PaymentError } from "@paid-tw/payment";
 import { ECPAY_BACKAUTH_ORIGINS, ECPAY_TEST_CARD, resolveBackAuthOrigin } from "../config.js";
 import { createEcpayBackAuthProvider } from "../provider.js";
@@ -57,6 +57,53 @@ describe("createEcpayBackAuthProvider — shape", () => {
     expect(p.capabilities.has("CREATE_PAYMENT")).toBe(true);
     expect(p.capabilities.has("GET_PAYMENT")).toBe(true);
     expect(p.capabilities.has("REFUND_PAYMENT")).toBe(true);
+  });
+
+  it("does not advertise REFUND_PAYMENT on a sandbox instance", () => {
+    // `supports()` is the feature-detection contract, so a sandbox provider claiming
+    // REFUND_PAYMENT would make `if (supports(p, "REFUND_PAYMENT")) p.refundPayment()`
+    // throw anyway. Refunds genuinely do not exist on stage, so the capability is
+    // resolved per instance rather than per adapter.
+    for (const sandbox of [
+      createEcpayBackAuthProvider({
+        merchantId: MERCHANT,
+        hashKey: HASH_KEY,
+        hashIv: HASH_IV,
+        sandbox: true,
+      }),
+      createEcpayBackAuthProvider({
+        merchantId: MERCHANT,
+        hashKey: HASH_KEY,
+        hashIv: HASH_IV,
+        baseUrl: ECPAY_BACKAUTH_ORIGINS.sandbox,
+      }),
+    ]) {
+      expect(supports(sandbox, "CREATE_PAYMENT")).toBe(true);
+      expect(supports(sandbox, "GET_PAYMENT")).toBe(true);
+      expect(supports(sandbox, "REFUND_PAYMENT")).toBe(false);
+    }
+
+    // Production, by contrast, does have it.
+    const prod = createEcpayBackAuthProvider({
+      merchantId: MERCHANT,
+      hashKey: HASH_KEY,
+      hashIv: HASH_IV,
+    });
+    expect(supports(prod, "REFUND_PAYMENT")).toBe(true);
+  });
+
+  it("keeps the capability guard and the runtime behaviour in agreement", async () => {
+    // The bug this prevents: guarded call still throwing.
+    const sandbox = createEcpayBackAuthProvider({
+      merchantId: MERCHANT,
+      hashKey: HASH_KEY,
+      hashIv: HASH_IV,
+      sandbox: true,
+    });
+    expect(supports(sandbox, "REFUND_PAYMENT")).toBe(false);
+    await expect(
+      sandbox.refundPayment({ orderId: "A", tradeNo: "1", amount: 1 }),
+    ).rejects.toMatchObject({ code: "UNSUPPORTED" });
   });
 
   it("resolves the ecpayment host", () => {
