@@ -1,5 +1,6 @@
 import { http, HttpResponse } from "msw";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { PaymentError as PaymentErrorClass } from "@paid-tw/payment";
 import type { PaymentError } from "@paid-tw/payment";
 import { ECPAY_BACKAUTH_ORIGINS, ECPAY_TEST_CARD, resolveBackAuthOrigin } from "../config.js";
 import { createEcpayBackAuthProvider } from "../provider.js";
@@ -296,6 +297,50 @@ describe("BackAuth — request validation", () => {
       testProvider().createPayment(input({ card: { ...CARD, ...patch } as EcpayCardDetails })),
       match,
     );
+  });
+
+  it.each([
+    ["undefined", undefined],
+    ["null", null],
+    ["an object", {}],
+  ] as const)("rejects a %s cardNo with VALIDATION, not a TypeError", async (_label, value) => {
+    // Untyped callers are real for a published package. Before normalizing, the regex
+    // failed and then `.length` threw, so a validation problem surfaced as an
+    // unhandled TypeError with no PaymentError code to branch on.
+    const err = (await testProvider()
+      .createPayment(input({ card: { ...CARD, cardNo: value as unknown as string } }))
+      .catch((e: unknown) => e)) as PaymentError;
+
+    expect(err).toBeInstanceOf(PaymentErrorClass);
+    expect(err.code).toBe("VALIDATION");
+    expect(err.message).toContain("0 個字元");
+  });
+
+  it("normalizes a numeric cardNo to the string ECPay documents", async () => {
+    // A number passed the regex (it coerces) and was then serialized into the payload
+    // as a JSON number rather than a string.
+    const seen: { body?: Record<string, unknown> } = {};
+    server.use(
+      http.post(AUTH_URL, async ({ request }) => {
+        seen.body = await readRequestData(request);
+        return HttpResponse.json(envelope(AUTH_SUCCESS));
+      }),
+    );
+    await testProvider().createPayment(
+      input({
+        card: { ...CARD, cardNo: Number(ECPAY_TEST_CARD.cardNo) as unknown as string },
+      }),
+    );
+    const cardInfo = seen.body?.CardInfo as Record<string, unknown>;
+    expect(cardInfo.CardNo).toBe(ECPAY_TEST_CARD.cardNo);
+    expect(typeof cardInfo.CardNo).toBe("string");
+  });
+
+  it("rejects a missing card object entirely", async () => {
+    const err = (await testProvider()
+      .createPayment(input({ card: undefined as unknown as EcpayCardDetails }))
+      .catch((e: unknown) => e)) as PaymentError;
+    expect(err.code).toBe("VALIDATION");
   });
 
   it("accepts ECPay's own test card, which fails Luhn", async () => {

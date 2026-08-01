@@ -283,7 +283,7 @@ export function createEcpayBackAuthProvider(
     async createPayment(input: EcpayBackAuthCreateInput): Promise<EcpayBackAuthResult> {
       assertSupports(PROVIDER, CAPABILITIES, "CREATE_PAYMENT");
       const { merchantId } = requireCredentials(config);
-      assertCreateInput(input);
+      const card = assertCreateInput(input);
 
       const data: Record<string, unknown> = {
         MerchantID: merchantId,
@@ -297,10 +297,10 @@ export function createEcpayBackAuthProvider(
           ReturnURL: input.notifyUrl,
         },
         CardInfo: {
-          CardNo: input.card.cardNo,
-          CardValidMM: input.card.expiryMonth,
-          CardValidYY: input.card.expiryYear,
-          CardCVV2: input.card.cvv,
+          CardNo: card.cardNo,
+          CardValidMM: card.expiryMonth,
+          CardValidYY: card.expiryYear,
+          CardCVV2: card.cvv,
           OrderResultURL: input.orderResultUrl,
           DirectCapture: input.directCapture ? "1" : "0",
           Redeem: input.redeem ? "Y" : "N",
@@ -436,7 +436,8 @@ function normalizeAuthorized(
   };
 }
 
-function assertCreateInput(input: EcpayBackAuthCreateInput): void {
+/** Validates the request and returns the normalized card to put on the wire. */
+function assertCreateInput(input: EcpayBackAuthCreateInput): EcpayCardDetails {
   if (input.currency && input.currency !== "TWD") {
     throw new PaymentError("VALIDATION", `${MESSAGE_PREFIX} 僅支援 TWD`, PROVIDER);
   }
@@ -485,43 +486,57 @@ function assertCreateInput(input: EcpayBackAuthCreateInput): void {
       PROVIDER,
     );
   }
-  assertCard(input.card);
+  return normalizeCard(input.card);
 }
 
 /**
- * Shape-only card validation.
+ * Shape-only card validation, returning the **normalized** card to send.
+ *
+ * Every field is coerced through {@link str} first, for two reasons that only show up
+ * with untyped callers (this is a published package, so they are real):
+ *
+ *   - A missing or `null` `cardNo` used to make the regex fail and then `.length`
+ *     throw, turning a VALIDATION error into an unhandled `TypeError`.
+ *   - A **numeric** `cardNo` passed validation (the regex coerces) and was then sent
+ *     to ECPay as a JSON number rather than the documented string.
  *
  * Deliberately **no Luhn check**: ECPay's own published test card
  * (`4311952222222222`) fails Luhn, so enforcing it would make the vendor's
  * documented stage card unusable. Real-card validation belongs at the point of
  * collection, not here.
  */
-function assertCard(card: EcpayCardDetails): void {
-  if (!/^\d{13,19}$/.test(card.cardNo)) {
+function normalizeCard(card: EcpayCardDetails): EcpayCardDetails {
+  const cardNo = str(card?.cardNo);
+  const expiryMonth = str(card?.expiryMonth);
+  const expiryYear = str(card?.expiryYear);
+  const cvv = str(card?.cvv);
+
+  if (!/^\d{13,19}$/.test(cardNo)) {
     // Never echo the value itself — only its length.
     throw new PaymentError(
       "VALIDATION",
-      `${MESSAGE_PREFIX} CardNo 需為 13-19 碼數字（收到 ${card.cardNo.length} 個字元）`,
+      `${MESSAGE_PREFIX} CardNo 需為 13-19 碼數字（收到 ${cardNo.length} 個字元）`,
       PROVIDER,
     );
   }
-  if (!/^(0[1-9]|1[0-2])$/.test(card.expiryMonth)) {
+  if (!/^(0[1-9]|1[0-2])$/.test(expiryMonth)) {
     throw new PaymentError(
       "VALIDATION",
-      `${MESSAGE_PREFIX} CardValidMM 需為 01-12（收到 "${card.expiryMonth}"）`,
+      `${MESSAGE_PREFIX} CardValidMM 需為 01-12（收到 "${expiryMonth}"）`,
       PROVIDER,
     );
   }
-  if (!/^\d{2}$/.test(card.expiryYear)) {
+  if (!/^\d{2}$/.test(expiryYear)) {
     throw new PaymentError(
       "VALIDATION",
-      `${MESSAGE_PREFIX} CardValidYY 需為 2 碼年份（收到 "${card.expiryYear}"）`,
+      `${MESSAGE_PREFIX} CardValidYY 需為 2 碼年份（收到 "${expiryYear}"）`,
       PROVIDER,
     );
   }
-  if (!/^\d{3,4}$/.test(card.cvv)) {
+  if (!/^\d{3,4}$/.test(cvv)) {
     throw new PaymentError("VALIDATION", `${MESSAGE_PREFIX} CardCVV2 需為 3-4 碼數字`, PROVIDER);
   }
+  return { cardNo, expiryMonth, expiryYear, cvv };
 }
 
 /** ECPay does not expose DoAction on stage at all, so fail before the network call. */
