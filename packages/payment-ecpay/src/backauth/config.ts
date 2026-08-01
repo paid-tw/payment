@@ -25,6 +25,15 @@ export const ECPAY_BACKAUTH_PATHS = {
    * it against a sandbox origin rather than letting it 404.
    */
   creditDoAction: "/1.0.0/Credit/DoAction",
+  /**
+   * 定期定額訂單作業 — `ReAuth` (retry the latest failed charge) or `Cancel` (stop all
+   * future charges). The only genuinely new endpoint for 定期定額: the *query* is
+   * {@link ECPAY_BACKAUTH_PATHS.queryTrade}, which returns the period progress inside
+   * `CardInfo`.
+   *
+   * @see https://developers.ecpay.com.tw/12130
+   */
+  creditCardPeriodAction: "/1.0.0/Cashier/CreditCardPeriodAction",
 } as const;
 
 export interface EcpayBackAuthProviderConfig extends ProviderRuntimeConfig {
