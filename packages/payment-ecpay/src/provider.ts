@@ -506,6 +506,8 @@ function mapChoosePayment(method?: PaymentMethod): string {
       return "ATM";
     case "cvs":
       return "CVS";
+    case "barcode":
+      return "BARCODE";
     default:
       return "ALL";
   }
