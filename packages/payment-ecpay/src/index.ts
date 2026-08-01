@@ -71,3 +71,36 @@ export type {
   EcpayPayCodeNotifyCredentials,
   EcpayPayCodeNotifyEnvelope,
 } from "./paycode/notify.js";
+
+// 信用卡幕後授權 (BackAuth) — separate factory / name "ecpay-backauth"
+//
+// ⚠️ This adapter accepts a raw card number, which puts the calling process in
+// PCI-DSS SAQ D scope. The other three ECPay adapters never see card data.
+export { createEcpayBackAuthProvider } from "./backauth/provider.js";
+export type {
+  EcpayAuthCardInfo,
+  EcpayBackAuth3DSResult,
+  EcpayBackAuthAction,
+  EcpayBackAuthAuthorizedResult,
+  EcpayBackAuthCreateInput,
+  EcpayBackAuthDoActionInput,
+  EcpayBackAuthDoActionResult,
+  EcpayBackAuthFields,
+  EcpayBackAuthProvider,
+  EcpayBackAuthResult,
+  EcpayCardDetails,
+} from "./backauth/provider.js";
+export {
+  ECPAY_BACKAUTH_ORIGINS,
+  ECPAY_BACKAUTH_PATHS,
+  ECPAY_SANDBOX_NO_3D,
+  ECPAY_TEST_CARD,
+  resolveBackAuthOrigin,
+} from "./backauth/config.js";
+export type { EcpayBackAuthProviderConfig } from "./backauth/config.js";
+export { ECPAY_BACKAUTH_NOTIFY_ACK, verifyEcpayBackAuthNotify } from "./backauth/notify.js";
+export type {
+  EcpayBackAuthNotify,
+  EcpayBackAuthNotifyCredentials,
+  EcpayBackAuthNotifyEnvelope,
+} from "./backauth/notify.js";
