@@ -9,6 +9,7 @@ import {
   type RefundPaymentRequest,
   type NormalizedPaymentData,
 } from "@paid-tw/payment";
+import { asNumber, str, text } from "../scalars.js";
 import { ecpgPost } from "./client.js";
 import { type EcpgProviderConfig, resolveEcpgOrigin } from "./config.js";
 import {
@@ -193,17 +194,19 @@ export function createEcpayEcpgProvider(config: EcpgProviderConfig): EcpayEcpgPr
       if (rtnCode !== 1) {
         throw new PaymentError(
           "PROVIDER",
-          `ECPay ECPG GetTokenbyTrade 失敗: ${decoded.RtnMsg ?? rtnCode}`,
+          `ECPay ECPG GetTokenbyTrade 失敗: ${text(decoded.RtnMsg) ?? rtnCode}`,
           "ecpay-ecpg",
           {
-            rawCode: String(decoded.RtnCode ?? ""),
-            rawMessage: decoded.RtnMsg !== undefined ? String(decoded.RtnMsg) : undefined,
+            rawCode: str(decoded.RtnCode),
+            rawMessage: text(decoded.RtnMsg),
             raw: decoded,
           },
         );
       }
 
-      const token = decoded.Token !== undefined ? String(decoded.Token) : "";
+      // `text()` not String(): a null Token would otherwise become "null" and slip
+      // past the emptiness guard below as a usable token.
+      const token = text(decoded.Token) ?? "";
       if (!token) {
         throw new PaymentError("PROVIDER", "ECPay ECPG 回應缺少 Token", "ecpay-ecpg", {
           raw: decoded,
@@ -213,8 +216,7 @@ export function createEcpayEcpgProvider(config: EcpgProviderConfig): EcpayEcpgPr
       return {
         mode: "token",
         token,
-        tokenExpireDate:
-          decoded.TokenExpireDate !== undefined ? String(decoded.TokenExpireDate) : undefined,
+        tokenExpireDate: text(decoded.TokenExpireDate),
         merchantTradeNo: input.orderId,
         frontend: {
           environment: config.sandbox || config.baseUrl ? "stage" : "prod",
@@ -285,40 +287,38 @@ function normalizeCreatePaymentResult(decoded: Record<string, unknown>): EcpgCre
   const cvs = (decoded.CVSInfo ?? {}) as Record<string, unknown>;
   const barcode = (decoded.BarcodeInfo ?? {}) as Record<string, unknown>;
 
+  const atmCode = {
+    bankCode: text(atm.BankCode),
+    vAccount: text(atm.vAccount),
+    expireDate: text(atm.ExpireDate),
+  };
+  const cvsCode = {
+    paymentNo: text(cvs.PaymentNo),
+    expireDate: text(cvs.ExpireDate),
+    paymentUrl: text(cvs.PaymentURL),
+  };
+  const barcodeCode = {
+    barcode1: text(barcode.Barcode1),
+    barcode2: text(barcode.Barcode2),
+    barcode3: text(barcode.Barcode3),
+    expireDate: text(barcode.ExpireDate),
+  };
+
   return {
     mode: "ecpg_create",
     success,
     rtnCode: Number.isFinite(rtnCode) ? rtnCode : -1,
-    rtnMsg: decoded.RtnMsg !== undefined ? String(decoded.RtnMsg) : "",
-    merTradeNo:
-      orderInfo.MerchantTradeNo !== undefined ? String(orderInfo.MerchantTradeNo) : undefined,
-    tradeNo: orderInfo.TradeNo !== undefined ? String(orderInfo.TradeNo) : undefined,
+    rtnMsg: text(decoded.RtnMsg) ?? "",
+    merTradeNo: text(orderInfo.MerchantTradeNo),
+    tradeNo: text(orderInfo.TradeNo),
     amount: asNumber(orderInfo.TradeAmt),
-    threeDUrl: threeD.ThreeDURL !== undefined ? String(threeD.ThreeDURL) : undefined,
-    unionPayUrl: union.UnionPayURL !== undefined ? String(union.UnionPayURL) : undefined,
-    atm:
-      atm.BankCode || atm.vAccount
-        ? {
-            bankCode: atm.BankCode !== undefined ? String(atm.BankCode) : undefined,
-            vAccount: atm.vAccount !== undefined ? String(atm.vAccount) : undefined,
-            expireDate: atm.ExpireDate !== undefined ? String(atm.ExpireDate) : undefined,
-          }
-        : undefined,
-    cvs: cvs.PaymentNo
-      ? {
-          paymentNo: String(cvs.PaymentNo),
-          expireDate: cvs.ExpireDate !== undefined ? String(cvs.ExpireDate) : undefined,
-          paymentUrl: cvs.PaymentURL !== undefined ? String(cvs.PaymentURL) : undefined,
-        }
-      : undefined,
-    barcode: barcode.Barcode1
-      ? {
-          barcode1: String(barcode.Barcode1),
-          barcode2: barcode.Barcode2 !== undefined ? String(barcode.Barcode2) : undefined,
-          barcode3: barcode.Barcode3 !== undefined ? String(barcode.Barcode3) : undefined,
-          expireDate: barcode.ExpireDate !== undefined ? String(barcode.ExpireDate) : undefined,
-        }
-      : undefined,
+    threeDUrl: text(threeD.ThreeDURL),
+    unionPayUrl: text(union.UnionPayURL),
+    // `text()` throughout: a null sibling next to a real value used to serialize
+    // as the literal "null" (e.g. BankCode null + vAccount set).
+    atm: (atmCode.bankCode ?? atmCode.vAccount) ? atmCode : undefined,
+    cvs: cvsCode.paymentNo ? cvsCode : undefined,
+    barcode: barcodeCode.barcode1 ? barcodeCode : undefined,
     raw: decoded,
   };
 }
@@ -361,10 +361,4 @@ function taipeiTradeDate(now = new Date()): string {
   }).formatToParts(now);
   const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "";
   return `${get("year")}/${get("month")}/${get("day")} ${get("hour")}:${get("minute")}:${get("second")}`;
-}
-
-function asNumber(input: unknown): number | undefined {
-  if (input === null || input === undefined || input === "") return undefined;
-  const num = Number(input);
-  return Number.isNaN(num) ? undefined : num;
 }

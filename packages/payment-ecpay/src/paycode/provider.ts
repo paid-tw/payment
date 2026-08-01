@@ -11,6 +11,7 @@ import {
   type RefundPaymentRequest,
 } from "@paid-tw/payment";
 import { ecpgPost } from "../ecpg/client.js";
+import { asNumber, str } from "../scalars.js";
 import {
   ECPAY_PAYCODE_PATHS,
   type EcpayPayCodeProviderConfig,
@@ -572,24 +573,4 @@ function taipeiTradeDate(now = new Date()): string {
 
 function asRecord(input: unknown): Record<string, unknown> {
   return input !== null && typeof input === "object" ? (input as Record<string, unknown>) : {};
-}
-
-/**
- * Coerce a JSON scalar to a string, collapsing anything else (including the JSON
- * `null`s QueryTrade sends for an unpaid order's `ATMAccBank`/`ATMAccNo`) to `""`.
- * A bare `String()` would turn those into the literal `"null"` and leak it into
- * normalized output.
- */
-function str(input: unknown): string {
-  if (typeof input === "string") return input;
-  if (typeof input === "number" || typeof input === "boolean" || typeof input === "bigint") {
-    return String(input);
-  }
-  return "";
-}
-
-function asNumber(input: unknown): number | undefined {
-  if (input === null || input === undefined || input === "") return undefined;
-  const num = Number(input);
-  return Number.isNaN(num) ? undefined : num;
 }

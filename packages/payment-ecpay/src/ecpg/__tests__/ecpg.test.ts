@@ -180,3 +180,69 @@ describe("createEcpayEcpgProvider", () => {
     await expect(p.refundPayment({ orderId: "x" })).rejects.toMatchObject({ code: "UNSUPPORTED" });
   });
 });
+
+describe("null coercion on the token path", () => {
+  it('rejects a null Token instead of accepting the string "null"', async () => {
+    // String(null) === "null" is truthy, so the emptiness guard would have passed
+    // it through as a usable embed token.
+    server.use(
+      http.post(TOKEN_URL, () =>
+        HttpResponse.json(okEnvelope({ RtnCode: 1, RtnMsg: "Success", Token: null })),
+      ),
+    );
+    const err = await provider()
+      .createPayment({
+        amount: 1,
+        currency: "TWD",
+        method: "card",
+        orderId: "NULLTOK1",
+        notifyUrl: "https://n.test",
+        email: "a@b.c",
+      })
+      .catch((e: unknown) => e);
+    expect((err as PaymentError).code).toBe("PROVIDER");
+    expect((err as PaymentError).message).toMatch(/缺少 Token/);
+  });
+
+  it('omits a null TokenExpireDate rather than reporting "null"', async () => {
+    server.use(
+      http.post(TOKEN_URL, () =>
+        HttpResponse.json(
+          okEnvelope({ RtnCode: 1, RtnMsg: "Success", Token: "tok_1", TokenExpireDate: null }),
+        ),
+      ),
+    );
+    const result = await provider().createPayment({
+      amount: 1,
+      currency: "TWD",
+      method: "card",
+      orderId: "NULLEXP1",
+      notifyUrl: "https://n.test",
+      email: "a@b.c",
+    });
+    expect(result.token).toBe("tok_1");
+    expect(result.tokenExpireDate).toBeUndefined();
+  });
+
+  it("drops null ATM/CVS fields from createPaymentWithPayToken", async () => {
+    server.use(
+      http.post(CREATE_URL, () =>
+        HttpResponse.json(
+          okEnvelope({
+            RtnCode: 1,
+            RtnMsg: "Success",
+            OrderInfo: { MerchantTradeNo: "MIX1", TradeNo: null },
+            ATMInfo: { BankCode: null, vAccount: "12345678901234", ExpireDate: null },
+          }),
+        ),
+      ),
+    );
+    const result = await provider().createPaymentWithPayToken({
+      payToken: "p",
+      merchantTradeNo: "MIX1",
+    });
+    expect(result.atm).toEqual({ vAccount: "12345678901234" });
+    expect(result.tradeNo).toBeUndefined();
+    expect(JSON.stringify(result.atm)).not.toContain("null");
+  });
+});

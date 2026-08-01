@@ -1,4 +1,5 @@
 import { PaymentError } from "@paid-tw/payment";
+import { asNumber, text } from "../scalars.js";
 import { decryptData } from "./aes.js";
 
 /**
@@ -130,10 +131,9 @@ export function verifyEcpgPaymentNotify(
     });
   }
 
-  const merchantId =
-    (data.MerchantID !== undefined ? String(data.MerchantID) : undefined) ||
-    envelope.MerchantID ||
-    "";
+  // A null inner MerchantID must fall through to the envelope, not become "null"
+  // and then fail the comparison below.
+  const merchantId = text(data.MerchantID) ?? envelope.MerchantID ?? "";
   if (expectedMerchantId && merchantId && merchantId !== expectedMerchantId) {
     throw new PaymentError(
       "VALIDATION",
@@ -161,66 +161,52 @@ export function verifyEcpgPaymentNotify(
   const success = rtnCode === 1;
   const simulated = data.SimulatePaid === 1 || data.SimulatePaid === "1";
 
-  const merTradeNo =
-    orderInfo.MerchantTradeNo !== undefined ? String(orderInfo.MerchantTradeNo) : "";
+  const merTradeNo = text(orderInfo.MerchantTradeNo) ?? "";
   if (!merTradeNo) {
     // Some early/token-only samples omit OrderInfo; still return structured result.
   }
 
-  const paymentType =
-    orderInfo.PaymentType !== undefined
-      ? String(orderInfo.PaymentType)
-      : data.PaymentType !== undefined
-        ? String(data.PaymentType)
-        : undefined;
+  const paymentType = text(orderInfo.PaymentType) ?? text(data.PaymentType);
+
+  // Every optional string goes through `text()`: ECPay mixes "" and null for
+  // "no value", and String(null) would surface as the literal "null".
+  const card = {
+    authCode: text(cardInfo.AuthCode),
+    card6No: text(cardInfo.Card6No),
+    card4No: text(cardInfo.Card4No),
+    amount: asNumber(cardInfo.Amount),
+  };
+  const atm = {
+    bankCode: text(atmInfo.ATMAccBank),
+    accountNo: text(atmInfo.ATMAccNo),
+  };
+  const cvs = {
+    paymentNo: text(cvsInfo.PaymentNo),
+    payFrom: text(cvsInfo.PayFrom),
+    paymentUrl: text(cvsInfo.PaymentURL),
+    payStoreId: text(cvsInfo.PayStoreID),
+    payStoreName: text(cvsInfo.PayStoreName),
+  };
+  const barcodePayFrom = text(barcodeInfo.PayFrom);
 
   return {
     success,
     simulated,
     merchantId: merchantId || expectedMerchantId || "",
     merTradeNo,
-    tradeNo: orderInfo.TradeNo !== undefined ? String(orderInfo.TradeNo) : undefined,
+    tradeNo: text(orderInfo.TradeNo),
     amount: asNumber(orderInfo.TradeAmt) ?? asNumber(cardInfo.Amount),
     method: mapPaymentType(paymentType),
-    paidAt: orderInfo.PaymentDate !== undefined ? String(orderInfo.PaymentDate) : undefined,
-    tradeDate: orderInfo.TradeDate !== undefined ? String(orderInfo.TradeDate) : undefined,
-    tradeStatus: orderInfo.TradeStatus !== undefined ? String(orderInfo.TradeStatus) : undefined,
+    paidAt: text(orderInfo.PaymentDate),
+    tradeDate: text(orderInfo.TradeDate),
+    tradeStatus: text(orderInfo.TradeStatus),
     rtnCode: Number.isFinite(rtnCode) ? rtnCode : -1,
-    rtnMsg: data.RtnMsg !== undefined ? String(data.RtnMsg) : "",
-    creditRefundId:
-      cardInfo.Gwsr !== undefined
-        ? String(cardInfo.Gwsr)
-        : data.Gwsr !== undefined
-          ? String(data.Gwsr)
-          : undefined,
-    card:
-      cardInfo.AuthCode || cardInfo.Card6No || cardInfo.Card4No
-        ? {
-            authCode: cardInfo.AuthCode !== undefined ? String(cardInfo.AuthCode) : undefined,
-            card6No: cardInfo.Card6No !== undefined ? String(cardInfo.Card6No) : undefined,
-            card4No: cardInfo.Card4No !== undefined ? String(cardInfo.Card4No) : undefined,
-            amount: asNumber(cardInfo.Amount),
-          }
-        : undefined,
-    atm:
-      atmInfo.ATMAccBank || atmInfo.ATMAccNo
-        ? {
-            bankCode: atmInfo.ATMAccBank !== undefined ? String(atmInfo.ATMAccBank) : undefined,
-            accountNo: atmInfo.ATMAccNo !== undefined ? String(atmInfo.ATMAccNo) : undefined,
-          }
-        : undefined,
-    cvs:
-      cvsInfo.PaymentNo || cvsInfo.PayFrom
-        ? {
-            paymentNo: cvsInfo.PaymentNo !== undefined ? String(cvsInfo.PaymentNo) : undefined,
-            payFrom: cvsInfo.PayFrom !== undefined ? String(cvsInfo.PayFrom) : undefined,
-            paymentUrl: cvsInfo.PaymentURL !== undefined ? String(cvsInfo.PaymentURL) : undefined,
-            payStoreId: cvsInfo.PayStoreID !== undefined ? String(cvsInfo.PayStoreID) : undefined,
-            payStoreName:
-              cvsInfo.PayStoreName !== undefined ? String(cvsInfo.PayStoreName) : undefined,
-          }
-        : undefined,
-    barcode: barcodeInfo.PayFrom ? { payFrom: String(barcodeInfo.PayFrom) } : undefined,
+    rtnMsg: text(data.RtnMsg) ?? "",
+    creditRefundId: text(cardInfo.Gwsr) ?? text(data.Gwsr),
+    card: (card.authCode ?? card.card6No ?? card.card4No) ? card : undefined,
+    atm: (atm.bankCode ?? atm.accountNo) ? atm : undefined,
+    cvs: (cvs.paymentNo ?? cvs.payFrom) ? cvs : undefined,
+    barcode: barcodePayFrom ? { payFrom: barcodePayFrom } : undefined,
     data,
     envelope,
   };
@@ -253,10 +239,4 @@ function mapPaymentType(value?: string): string {
   if (v === "applepay") return "applepay";
   if (v === "unionpay") return "unionpay";
   return value;
-}
-
-function asNumber(input: unknown): number | undefined {
-  if (input === null || input === undefined || input === "") return undefined;
-  const num = Number(input);
-  return Number.isNaN(num) ? undefined : num;
 }
