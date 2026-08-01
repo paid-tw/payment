@@ -1,7 +1,9 @@
 import { defineConfig } from "tsdown";
 
 export default defineConfig({
-  entry: ["src/index.ts"],
+  // Two entries: the root, and the raw-PAN adapter on its own subpath so it can
+  // be excluded from a build by simply not importing it.
+  entry: ["src/index.ts", "src/backauth/index.ts"],
   format: ["esm", "cjs"],
   dts: { sourcemap: false },
   sourcemap: true,

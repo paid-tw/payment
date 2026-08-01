@@ -1,0 +1,51 @@
+import { describe, expect, it } from "vitest";
+import * as backauthEntry from "../backauth/index.js";
+import * as rootEntry from "../index.js";
+
+/**
+ * Guards the packaging decision behind `@paid-tw/payment-ecpay/backauth`.
+ *
+ * 信用卡幕後授權 is the only adapter that accepts a raw card number, and it sits on its
+ * own subpath so an application can show by import graph that it never pulls in a
+ * raw-PAN surface. PCI-DSS scope follows from *handling* card data — not calling the
+ * factory keeps you in SAQ A either way — but the split is what makes that
+ * mechanically checkable instead of a claim.
+ *
+ * Re-exporting BackAuth from the root would silently undo that, and nothing else in
+ * the test suite would notice, so it is asserted here.
+ */
+const RAW_PAN_PATTERN = /BackAuth|BACKAUTH|TEST_CARD|NO_3D/i;
+
+describe("package entry points", () => {
+  it("keeps every raw-PAN symbol out of the root entry", () => {
+    const leaked = Object.keys(rootEntry).filter((name) => RAW_PAN_PATTERN.test(name));
+    expect(leaked).toEqual([]);
+  });
+
+  it("still exports the three card-data-free adapters from the root", () => {
+    expect(rootEntry).toHaveProperty("createEcpayProvider");
+    expect(rootEntry).toHaveProperty("createEcpayEcpgProvider");
+    expect(rootEntry).toHaveProperty("createEcpayPayCodeProvider");
+  });
+
+  it("exposes the BackAuth surface on the subpath instead", () => {
+    expect(backauthEntry).toHaveProperty("createEcpayBackAuthProvider");
+    expect(backauthEntry).toHaveProperty("verifyEcpayBackAuthNotify");
+    expect(backauthEntry).toHaveProperty("ECPAY_BACKAUTH_NOTIFY_ACK");
+    // The stage helpers a BackAuth integrator needs live here too, not at the root.
+    expect(backauthEntry).toHaveProperty("ECPAY_SANDBOX_NO_3D");
+    expect(backauthEntry).toHaveProperty("ECPAY_TEST_CARD");
+  });
+
+  it("does not duplicate the shared adapters onto the subpath", () => {
+    // The subpath is the raw-PAN adapter only; it must not become a second front door
+    // to the whole package.
+    for (const name of [
+      "createEcpayProvider",
+      "createEcpayEcpgProvider",
+      "createEcpayPayCodeProvider",
+    ]) {
+      expect(backauthEntry).not.toHaveProperty(name);
+    }
+  });
+});

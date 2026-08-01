@@ -169,8 +169,10 @@ store fields), since 模擬付款 deliberately never settles.
 ## 信用卡幕後授權 (BackAuth) — coverage
 
 **Status: core path landed** as `createEcpayBackAuthProvider` (`name: "ecpay-backauth"`),
-under `src/backauth/*`. ⚠️ **Raw-PAN adapter — PCI-DSS SAQ D**, unlike every other
-adapter here.
+under `src/backauth/*` and published on the **`@paid-tw/payment-ecpay/backauth`
+subpath**, not the package root. ⚠️ **Raw-PAN adapter — PCI-DSS SAQ D**, unlike every
+other adapter here; the separate entry point lets a build prove by import graph that it
+excludes the card-accepting surface.
 
 | Doc                                                          | Endpoint (`ecpayment(-stage)…`)         | Status                                                              |
 | ------------------------------------------------------------ | --------------------------------------- | ------------------------------------------------------------------- |

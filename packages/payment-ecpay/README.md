@@ -86,12 +86,12 @@ MSW 的 default handlers 會對已知 `MerchantTradeNo` 重放 field-exact fixtu
 綠界金流有四條產品線，**同一 npm 套件、四個 factory、四個 `name`**（詳見
 [`docs/ecpay-provider-separation.md`](../../docs/ecpay-provider-separation.md)）：
 
-| 系列                  | Factory                       | `name`             | Host               | create 結果                                   |
-| --------------------- | ----------------------------- | ------------------ | ------------------ | --------------------------------------------- |
-| **全方位金流 (AIO)**  | `createEcpayProvider`         | `"ecpay"`          | `payment.ecpay…`   | `{ mode: "redirect", action, params }`        |
-| **站內付 2.0 (ECPG)** | `createEcpayEcpgProvider`     | `"ecpay-ecpg"`     | `ecpg.ecpay…`      | `{ mode: "token", token, merchantTradeNo }`   |
-| **非信用卡幕後取號**  | `createEcpayPayCodeProvider`  | `"ecpay-paycode"`  | `ecpayment.ecpay…` | `{ mode: "paycode", atm/cvs/barcode }`        |
-| **信用卡幕後授權** ⚠️ | `createEcpayBackAuthProvider` | `"ecpay-backauth"` | `ecpayment.ecpay…` | `{ mode: "3ds" }` 或 `{ mode: "authorized" }` |
+| 系列                  | Factory                                              | `name`             | Host               | create 結果                                   |
+| --------------------- | ---------------------------------------------------- | ------------------ | ------------------ | --------------------------------------------- |
+| **全方位金流 (AIO)**  | `createEcpayProvider`                                | `"ecpay"`          | `payment.ecpay…`   | `{ mode: "redirect", action, params }`        |
+| **站內付 2.0 (ECPG)** | `createEcpayEcpgProvider`                            | `"ecpay-ecpg"`     | `ecpg.ecpay…`      | `{ mode: "token", token, merchantTradeNo }`   |
+| **非信用卡幕後取號**  | `createEcpayPayCodeProvider`                         | `"ecpay-paycode"`  | `ecpayment.ecpay…` | `{ mode: "paycode", atm/cvs/barcode }`        |
+| **信用卡幕後授權** ⚠️ | `createEcpayBackAuthProvider`（`/backauth` subpath） | `"ecpay-backauth"` | `ecpayment.ecpay…` | `{ mode: "3ds" }` 或 `{ mode: "authorized" }` |
 
 ```ts
 import { createEcpayEcpgProvider, ECPAY_SANDBOX } from "@paid-tw/payment-ecpay";
@@ -268,11 +268,17 @@ cloudflared tunnel --url http://localhost:8787   # 另一個 shell，取得公�
 稽核與基礎架構的要求完全不同等級。
 
 範圍是由「**你是否處理卡號**」決定，不是由「程式碼在不在 bundle 裡」決定 —— 所以只要
-不呼叫 `createEcpayBackAuthProvider`，你仍然在 SAQ A。但要注意目前的隔離程度：BackAuth
-是獨立 factory、獨立模組，可是它從套件根目錄 re-export，而且套件只發佈 `"."` 這一個
-entry，所以 `import "@paid-tw/payment-ecpay"` 會連帶載入這個模組。也就是說，你**無法只靠
-import graph 證明**某個 app 不含 raw-PAN 介面。若需要那種可稽核性，得加 `./backauth`
-subpath export（討論見 PR #3）。
+不呼叫 `createEcpayBackAuthProvider`，你仍然在 SAQ A。
+
+不過 BackAuth **不從套件根目錄匯出**，而是放在自己的 subpath：
+
+```ts
+import { createEcpayBackAuthProvider } from "@paid-tw/payment-ecpay/backauth";
+```
+
+這樣你可以**只靠 import graph 就證明**某個 app 不含 raw-PAN 介面 —— 稽核時是個機械可查的
+答案，而不是一句「我們沒有用到」。根目錄的 `@paid-tw/payment-ecpay` 只有另外三條卡號不
+經手的 adapter。
 
 請確定你真的需要「後端直接拿卡號授權、消費者不看任何付款頁」這個能力，而不是因為它
 用起來比較方便。如果只是要收信用卡，用 AIO 或站內付 2.0。
@@ -282,7 +288,8 @@ subpath export（討論見 PR #3）。
 ### 用法
 
 ```ts
-import { createEcpayBackAuthProvider, ECPAY_SANDBOX_NO_3D } from "@paid-tw/payment-ecpay";
+// 注意 import 路徑：BackAuth 在 /backauth subpath，不在套件根目錄
+import { createEcpayBackAuthProvider, ECPAY_SANDBOX_NO_3D } from "@paid-tw/payment-ecpay/backauth";
 
 const backauth = createEcpayBackAuthProvider({ ...ECPAY_SANDBOX_NO_3D });
 
