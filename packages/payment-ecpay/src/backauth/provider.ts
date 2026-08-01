@@ -282,8 +282,11 @@ export function createEcpayBackAuthProvider(
   }
 
   async function doAction(input: EcpayBackAuthDoActionInput): Promise<EcpayBackAuthDoActionResult> {
-    const { merchantId } = requireCredentials(config);
+    // Environment first, credentials second. DoAction cannot work on stage no matter
+    // what credentials are supplied, so reporting AUTH for a sandbox instance with
+    // unset keys sends the caller off to find keys that would not have helped.
     assertDoActionAvailable(config, origin);
+    const { merchantId } = requireCredentials(config);
 
     if (!["C", "R", "E", "N"].includes(input.action)) {
       throw new PaymentError(

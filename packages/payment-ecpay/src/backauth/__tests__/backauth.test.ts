@@ -580,6 +580,23 @@ describe("Credit/DoAction — production only", () => {
     expect(err.message).toContain("僅正式環境");
   });
 
+  it("reports UNSUPPORTED before AUTH when sandbox and credentials are both missing", async () => {
+    // Error precedence matters here: the environment constraint is unconditional,
+    // while credentials are fixable. Reporting AUTH first would send someone hunting
+    // for keys that cannot make this endpoint exist.
+    const bare = createEcpayBackAuthProvider({ sandbox: true });
+    await expect(
+      bare.creditDoAction({ orderId: "A", tradeNo: "1", action: "R", amount: 1 }),
+    ).rejects.toMatchObject({ code: "UNSUPPORTED" });
+
+    // A production instance with no credentials still reports AUTH, as it should —
+    // there the credentials genuinely are the problem.
+    const prodBare = createEcpayBackAuthProvider({});
+    await expect(
+      prodBare.creditDoAction({ orderId: "A", tradeNo: "1", action: "R", amount: 1 }),
+    ).rejects.toMatchObject({ code: "AUTH" });
+  });
+
   it("also refuses when baseUrl points at the stage origin", async () => {
     const sandbox = createEcpayBackAuthProvider({
       merchantId: MERCHANT,
