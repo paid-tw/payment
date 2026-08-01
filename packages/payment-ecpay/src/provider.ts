@@ -137,11 +137,17 @@ export interface EcpayAioFields extends EcpayAioCommonFields, EcpayTakeNumberHoo
    * CheckMacValue is computed — so method-specific parameters work without this
    * adapter having to know about them.
    *
-   * Values are stringified; `undefined` entries are dropped. Fields this adapter
-   * derives or signs (`MerchantID`, `MerchantTradeNo`, `TotalAmount`, `ReturnURL`,
-   * `PaymentType`, `EncryptType`, `ChoosePayment`, `CheckMacValue`) are **rejected**
-   * rather than silently overridden — two sources of truth for a signed field is how
-   * you get a MAC that does not match what you meant to send.
+   * Values are stringified; `undefined` entries are dropped. Two groups of names are
+   * **rejected** rather than merged, because in both cases a silent override would mean
+   * two sources of truth for one field:
+   *
+   *   - derived or signed by this adapter — `MerchantID`, `MerchantTradeNo`,
+   *     `MerchantTradeDate`, `PaymentType`, `TotalAmount`, `ReturnURL`, `ChoosePayment`,
+   *     `EncryptType`, `CheckMacValue`
+   *   - already covered by a typed option above (`StoreID` → `storeId`, and so on)
+   *
+   * Field names must be ASCII identifiers, which also keeps `__proto__` and friends off
+   * the wire.
    *
    * @example
    * // ATM: 7-day deadline plus the take-number notify
@@ -603,35 +609,107 @@ function assign(target: Record<string, string>, source: Record<string, string | 
 }
 
 /**
- * Fields this adapter derives or signs. Letting a passthrough entry win over these
- * would create two sources of truth for a value that goes into the CheckMacValue —
- * the resulting order is rejected by ECPay and the cause is invisible from the code.
+ * Fields this adapter derives or signs, mapped to how a caller is meant to influence
+ * them. Letting a passthrough entry win over these would create two sources of truth
+ * for a value that goes into the CheckMacValue — ECPay then rejects the order and the
+ * cause is invisible from the code.
+ *
+ * `null` means the field is not caller-controllable at all, so the error must not
+ * suggest a named alternative that does not exist.
  */
-const RESERVED_AIO_PARAMS: ReadonlySet<string> = new Set([
-  "MerchantID",
-  "MerchantTradeNo",
-  "MerchantTradeDate",
-  "PaymentType",
-  "TotalAmount",
-  "ReturnURL",
-  "ChoosePayment",
-  "EncryptType",
-  "CheckMacValue",
+const RESERVED_AIO_PARAMS: ReadonlyMap<string, string | null> = new Map([
+  ["MerchantID", "provider config (merchantId)"],
+  ["MerchantTradeNo", "orderId"],
+  ["MerchantTradeDate", null],
+  ["PaymentType", null],
+  ["TotalAmount", "amount"],
+  ["ReturnURL", "notifyUrl"],
+  ["ChoosePayment", "method"],
+  ["EncryptType", null],
+  ["CheckMacValue", null],
 ]);
 
-/** Stringify passthrough values, drop `undefined`, and refuse the reserved names. */
+/**
+ * AIO parameters that already have a typed option. Passing them through `params` as
+ * well is rejected rather than silently winning: precedence between the two would be
+ * invisible at the call site, and the docs promise the named field is authoritative.
+ */
+const TYPED_AIO_PARAMS: ReadonlyMap<string, string> = new Map([
+  ["StoreID", "storeId"],
+  ["ClientBackURL", "clientBackUrl"],
+  ["ItemURL", "itemUrl"],
+  ["Remark", "remark"],
+  ["ChooseSubPayment", "chooseSubPayment"],
+  ["OrderResultURL", "orderResultUrl"],
+  ["IgnorePayment", "ignorePayment"],
+  ["PlatformID", "platformId"],
+  ["CustomField1", "customField1"],
+  ["CustomField2", "customField2"],
+  ["CustomField3", "customField3"],
+  ["CustomField4", "customField4"],
+  ["Language", "language"],
+  ["PaymentInfoURL", "paymentInfoUrl"],
+  ["ClientRedirectURL", "clientRedirectUrl"],
+]);
+
+/**
+ * ECPay parameter names are ASCII identifiers (`Desc_1`, `CustomField1`, …), so an
+ * allowlist is the accurate shape check. It rejects `__proto__` on its own, but
+ * `constructor` and `prototype` are legitimate identifiers and need naming explicitly.
+ *
+ * Measured rather than assumed: `__proto__` was silently *dropped* before this — the
+ * setter ignores a string, so it was never prototype pollution — while `constructor`
+ * and `prototype` were signed and sent as real form fields. Neither is exploitable, but
+ * both are silent surprises, and ECPay has no field by those names, so rejecting them
+ * costs nothing.
+ */
+const AIO_PARAM_NAME = /^[A-Za-z][A-Za-z0-9_]*$/;
+const OBJECT_INTERNAL_NAMES: ReadonlySet<string> = new Set([
+  "__proto__",
+  "constructor",
+  "prototype",
+]);
+
+/** Stringify passthrough values, drop `undefined`, and refuse names we own. */
 function sanitizeExtraParams(
   extra: Record<string, string | number | undefined> | undefined,
 ): Record<string, string | undefined> {
   if (!extra) return {};
-  const out: Record<string, string | undefined> = {};
+  const out: Record<string, string | undefined> = Object.create(null) as Record<
+    string,
+    string | undefined
+  >;
   for (const [key, value] of Object.entries(extra)) {
     if (value === undefined) continue;
+
+    if (OBJECT_INTERNAL_NAMES.has(key)) {
+      throw new PaymentError(
+        "VALIDATION",
+        `ECPay params.${key} 不是有效的欄位名稱（物件內部名稱，綠界無此欄位）`,
+        "ecpay",
+      );
+    }
+    if (!AIO_PARAM_NAME.test(key)) {
+      throw new PaymentError(
+        "VALIDATION",
+        `ECPay params 的欄位名稱需為英數字與底線且以字母開頭（收到 "${key}"）`,
+        "ecpay",
+      );
+    }
     if (RESERVED_AIO_PARAMS.has(key)) {
+      const alternative = RESERVED_AIO_PARAMS.get(key) ?? null;
       throw new PaymentError(
         "VALIDATION",
         `ECPay params.${key} 由 adapter 產生或簽章，不可覆寫` +
-          (key === "CheckMacValue" ? "" : `（請改用對應的具名參數或 method）`),
+          (alternative ? `（請改用 ${alternative}）` : ""),
+        "ecpay",
+      );
+    }
+    const typed = TYPED_AIO_PARAMS.get(key);
+    if (typed) {
+      throw new PaymentError(
+        "VALIDATION",
+        `ECPay params.${key} 已有具名參數，請改用 ${typed}（避免兩處設定同一欄位）`,
         "ecpay",
       );
     }

@@ -159,6 +159,69 @@ describe("AIO params escape hatch", () => {
     expect(err.message).toMatch(/不是有效數值/);
   });
 
+  it.each([
+    ["StoreID", "storeId"],
+    ["PaymentInfoURL", "paymentInfoUrl"],
+    ["CustomField1", "customField1"],
+    ["Language", "language"],
+  ])("refuses %s in params, pointing at the typed option %s", async (raw, typed) => {
+    // Before this, params was applied after the typed fields and silently won — so
+    // `storeId: "TYPED"` plus `params.StoreID: "RAW"` sent "RAW", contradicting the
+    // documented precedence. Failing is better than either winner being invisible.
+    const err = await caught(testProvider().createPayment(base({ params: { [raw]: "x" } })));
+    expect(err.code).toBe("VALIDATION");
+    expect(err.message).toContain(typed);
+    expect(err.message).toMatch(/兩處設定同一欄位/);
+  });
+
+  it.each(["__proto__", "constructor", "prototype"])(
+    "refuses the object-internal name %s",
+    async (key) => {
+      // Measured, not assumed: `__proto__` was silently dropped (a string assignment to
+      // it is a no-op, so never pollution), while `constructor`/`prototype` were signed
+      // and sent as real fields. ECPay has no such fields, so rejecting costs nothing.
+      const err = await caught(testProvider().createPayment(base({ params: { [key]: "x" } })));
+      expect(err.code).toBe("VALIDATION");
+      expect(err.message).toMatch(/物件內部名稱/);
+    },
+  );
+
+  it("leaves Object.prototype untouched either way", async () => {
+    const before = Object.keys(Object.prototype).length;
+    await caught(testProvider().createPayment(base({ params: { __proto__: "x" } })));
+    expect(Object.keys(Object.prototype).length).toBe(before);
+  });
+
+  it.each(["_leading", "9start", "has-dash", "with space", ""])(
+    "refuses the malformed field name %j",
+    async (key) => {
+      const err = await caught(testProvider().createPayment(base({ params: { [key]: "x" } })));
+      expect(err.code).toBe("VALIDATION");
+      expect(err.message).toMatch(/欄位名稱/);
+    },
+  );
+
+  it.each([
+    ["MerchantID", "merchantId"],
+    ["TotalAmount", "amount"],
+    ["ReturnURL", "notifyUrl"],
+    ["ChoosePayment", "method"],
+    ["MerchantTradeNo", "orderId"],
+  ])("names the right alternative when refusing %s", async (key, alternative) => {
+    const err = await caught(testProvider().createPayment(base({ params: { [key]: "x" } })));
+    expect(err.message).toContain(alternative);
+  });
+
+  it.each(["MerchantTradeDate", "EncryptType", "PaymentType", "CheckMacValue"])(
+    "does not invent an alternative for %s, which callers cannot set",
+    async (key) => {
+      // The old message told everyone to "use the named param or method" — untrue for
+      // these four, so it sent readers looking for an option that does not exist.
+      const err = await caught(testProvider().createPayment(base({ params: { [key]: "x" } })));
+      expect(err.message).toMatch(/不可覆寫$/);
+    },
+  );
+
   it("still produces a usable form with no params at all", async () => {
     const form = await testProvider().createPayment(base());
     expect(form.mode).toBe("redirect");
