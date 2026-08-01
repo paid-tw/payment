@@ -92,6 +92,32 @@ describe("createEcpayBackAuthProvider — shape", () => {
     expect(supports(prod, "REFUND_PAYMENT")).toBe(true);
   });
 
+  it("treats sandbox:true as sandbox even behind a custom baseUrl", async () => {
+    // The bug: `baseUrl` used to shadow the flag entirely, so stage-through-a-proxy —
+    // `{ sandbox: true, baseUrl: "https://internal-proxy" }` — was classified as
+    // production. It then advertised REFUND_PAYMENT and actually attempted a DoAction
+    // that cannot exist, failing with NETWORK instead of a useful UNSUPPORTED.
+    const proxied = createEcpayBackAuthProvider({
+      merchantId: MERCHANT,
+      hashKey: HASH_KEY,
+      hashIv: HASH_IV,
+      sandbox: true,
+      baseUrl: "https://ecpay-proxy.invalid",
+    });
+    expect(supports(proxied, "REFUND_PAYMENT")).toBe(false);
+    await expect(
+      proxied.creditDoAction({ orderId: "A", tradeNo: "1", action: "R", amount: 1 }),
+    ).rejects.toMatchObject({ code: "UNSUPPORTED" });
+  });
+
+  it("still routes through baseUrl even when the flag says sandbox", () => {
+    // Environment classification and request routing are separate questions — the
+    // fix must not make `baseUrl` stop winning for routing.
+    expect(resolveBackAuthOrigin({ sandbox: true, baseUrl: "https://x.test" })).toBe(
+      "https://x.test",
+    );
+  });
+
   it("keeps the capability guard and the runtime behaviour in agreement", async () => {
     // The bug this prevents: guarded call still throwing.
     const sandbox = createEcpayBackAuthProvider({

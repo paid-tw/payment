@@ -47,9 +47,18 @@ function resolveCapabilities(
   return capabilities;
 }
 
-/** Sandbox either by explicit flag or by a `baseUrl` pointing at the stage host. */
+/**
+ * Sandbox if the flag says so **or** the resolved origin is the stage host.
+ *
+ * A real OR, unlike the first version of this function, which let `baseUrl` shadow
+ * the flag entirely. That misclassified the realistic `{ sandbox: true, baseUrl:
+ * "https://internal-proxy" }` setup — stage reached through a proxy — as production,
+ * so it advertised `REFUND_PAYMENT` and went on to attempt a DoAction that cannot
+ * exist. `resolveBackAuthOrigin` still lets `baseUrl` win for *routing*; that is a
+ * separate question from which environment we are talking to.
+ */
 function isSandboxOrigin(config: EcpayBackAuthProviderConfig, origin: string): boolean {
-  return config.baseUrl ? origin === ECPAY_BACKAUTH_ORIGINS.sandbox : Boolean(config.sandbox);
+  return Boolean(config.sandbox) || origin === ECPAY_BACKAUTH_ORIGINS.sandbox;
 }
 
 const PROVIDER = "ecpay-backauth";
