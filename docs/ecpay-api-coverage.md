@@ -223,7 +223,7 @@ Capabilities to add later:
 | AIO create methods (Python samples)           | ~14 create variants             | ~4 (ALL/Credit/ATM/CVS via ChoosePayment) |
 | AIO ops (query/refund/period/download/notify) | ~8                              | 2 (query + refund R)                      |
 | ECPG samples                                  | ~25+ files/dirs                 | 3 (GetToken + CreatePayment + notify)     |
-| 幕後取號 endpoints                            | 6                               | 4 (GenPaymentCode + 2 queries + notify)   |
+| 幕後取號 endpoints                            | 6                               | 6 (all — 取號, 3 queries, media, notify)  |
 | Crypto primitives                             | CMV + AES JSON                  | both (AES pinned to ECPay's own vectors)  |
 
 ### P2.5 — 非信用卡幕後取號
@@ -232,7 +232,9 @@ Capabilities to add later:
   under `src/paycode/*`, stage-verified 2026-08-01.
 - ~~Record real ReturnURL notifies~~ — done 2026-08-01 for all three methods via
   tunnel + 模擬付款.
-- QueryCVSBarcode (三段式條碼) and QueryTradeMedia (撥款對帳檔) — open.
+- ~~QueryCVSBarcode (三段式條碼) and QueryTradeMedia (撥款對帳檔)~~ — done, both
+  stage-verified 2026-08-01. Further doc deviations found: barcode segments are
+  chain-specific; the 對帳檔 is Excel-armoured CSV with a 13th undocumented column.
 - A truly-paid notify (`TradeStatus: "1"` + 繳費門市) still needs a real
   convenience-store payment; that one fixture stays doc-derived.
 
