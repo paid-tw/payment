@@ -762,7 +762,6 @@ function normalizeAuthorized(
   };
 }
 
-/** Validates the request and returns the normalized card to put on the wire. */
 /** Masked card + bank + instalment data. Shared by the authorize and query paths. */
 function normalizeCardInfo(cardInfo: Record<string, unknown>): EcpayAuthCardInfo | undefined {
   const card: EcpayAuthCardInfo = {
