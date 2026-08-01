@@ -111,12 +111,12 @@ describe("定期定額 request shape", () => {
 
 describe("定期定額 schedule validation", () => {
   it.each([
-    ["D", 366, "每天"],
-    ["M", 13, "每月"],
-    ["Y", 2, "每年"],
+    { type: "D", frequency: 366 },
+    { type: "M", frequency: 13 },
+    { type: "Y", frequency: 2 },
   ] as const)(
-    "rejects a %s frequency of %i above the documented ceiling",
-    async (type, frequency) => {
+    "rejects a $type frequency of $frequency above the documented ceiling",
+    async ({ type, frequency }) => {
       const err = await caught(
         testProvider().createPayment(
           base({ period: { amount: 5, type, frequency, execTimes: 2 } }),
@@ -128,12 +128,12 @@ describe("定期定額 schedule validation", () => {
   );
 
   it.each([
-    ["D", 1000],
-    ["M", 1000],
-    ["Y", 100],
+    { type: "D", execTimes: 1000 },
+    { type: "M", execTimes: 1000 },
+    { type: "Y", execTimes: 100 },
   ] as const)(
-    "rejects a %s execTimes of %i above the documented ceiling",
-    async (type, execTimes) => {
+    "rejects a $type execTimes of $execTimes above the documented ceiling",
+    async ({ type, execTimes }) => {
       const err = await caught(
         testProvider().createPayment(
           base({ period: { amount: 5, type, frequency: 1, execTimes } }),
@@ -187,7 +187,7 @@ describe("定期定額 schedule validation", () => {
   it("refuses to combine a schedule with installments", async () => {
     // ECPay cannot express "instalments, recurring" — sending both would let the API
     // pick, which is exactly the ambiguity worth failing on.
-    const err = await caught(testProvider().createPayment(base({ installments: [3] })));
+    const err = await caught(testProvider().createPayment(base({ installments: 3 })));
     expect(err.code).toBe("VALIDATION");
     expect(err.message).toMatch(/分期/);
   });
@@ -211,7 +211,9 @@ describe("定期定額 create response", () => {
       base({ period: { amount: 5, type: "Y", frequency: 1, execTimes: 2 } }),
     );
 
-    expect(result.mode).toBe("authorized");
+    // A plain `expect` does not narrow the union, and the two branches share almost no
+    // fields — so narrow explicitly or every assertion below is unchecked.
+    if (result.mode !== "authorized") throw new Error(`expected authorized, got ${result.mode}`);
     // The thing most likely to surprise a caller: cycle 1 is charged at create time.
     expect(result.period).toMatchObject({
       type: "Y",
