@@ -22,6 +22,7 @@ export const HASH_IV = ECPAY_SANDBOX_NO_3D.hashIv;
 export const AUTH_URL = `${BASE}${ECPAY_BACKAUTH_PATHS.backAuth}`;
 export const QUERY_URL = `${BASE}${ECPAY_BACKAUTH_PATHS.queryTrade}`;
 export const DOACTION_URL = `${BASE}${ECPAY_BACKAUTH_PATHS.creditDoAction}`;
+export const PERIOD_ACTION_URL = `${BASE}${ECPAY_BACKAUTH_PATHS.creditCardPeriodAction}`;
 
 export function envelope(data: Record<string, unknown>, transCode = 1) {
   return {
@@ -43,6 +44,18 @@ export function respondWith(url: string, data: Record<string, unknown>) {
 }
 
 export const server = setupServer();
+
+/** Capture the decrypted request body a handler received, then answer with `data`. */
+export function capture(url: string, data: Record<string, unknown>) {
+  const seen: { body?: Record<string, unknown> } = {};
+  server.use(
+    http.post(url, async ({ request }) => {
+      seen.body = await readRequestData(request);
+      return HttpResponse.json(envelope(data));
+    }),
+  );
+  return seen;
+}
 
 /** Offline provider. `sandbox` is left unset so DoAction is reachable in tests. */
 export function testProvider(overrides: Partial<EcpayBackAuthProviderConfig> = {}) {

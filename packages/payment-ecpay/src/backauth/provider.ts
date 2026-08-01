@@ -122,7 +122,127 @@ export interface EcpayBackAuthFields {
   installments?: number;
   /** Redeem card loyalty points (紅利). Not supported for AmEx. */
   redeem?: boolean;
+  /**
+   * Turn this into a 定期定額 order. Mutually exclusive with `installments` — one splits a
+   * single purchase, the other charges repeatedly.
+   *
+   * ⚠️ This schedules **real recurring charges**.
+   */
+  period?: EcpayPeriodSchedule;
   customField?: string;
+}
+
+/**
+ * 定期定額 schedule. All four fields are required together — ECPay treats a partial
+ * schedule as a malformed order rather than defaulting the rest.
+ *
+ * ⚠️ Creating one of these schedules a **recurring charge**. `execTimes` is how many
+ * times ECPay will authorize, so the total taken is roughly `amount * execTimes`.
+ */
+export interface EcpayPeriodSchedule {
+  /** Amount authorized on **each** cycle. */
+  amount: number;
+  /** `D` daily, `M` monthly, `Y` yearly. */
+  type: "D" | "M" | "Y";
+  /**
+   * Cycles between charges. Bounded by `type`: `D` 1-365, `M` 1-12, `Y` exactly 1.
+   *
+   * With `D`/`M`, ECPay charges on the same day-of-period and falls back to the last day
+   * of the month where that date does not exist.
+   */
+  frequency: number;
+  /** Total authorizations. Max 999 for `D`/`M`, 99 for `Y`. */
+  execTimes: number;
+  /** Where each subsequent cycle's result is posted. Defaults to `notifyUrl`. */
+  returnUrl?: string;
+}
+
+/** Period progress, from a query or a cycle notify. */
+export interface EcpayPeriodProgress {
+  type?: string;
+  frequency?: number;
+  execTimes?: number;
+  /** Per-cycle amount as set when the order was created. */
+  periodAmount?: number;
+  /** How many cycles have authorized successfully so far. */
+  totalSuccessTimes?: number;
+  /** Sum authorized so far. */
+  totalSuccessAmount?: number;
+}
+
+/**
+ * 定期定額訂單作業.
+ *
+ * - `ReAuth` — retry a failed charge. ⚠️ Only the **latest** cycle can be retried: if
+ *   cycle 2 failed but cycle 3 succeeded, cycle 2 is no longer recoverable.
+ * - `Cancel` — stop all future charges. ⚠️ **Irreversible** — ECPay cannot re-enable a
+ *   cancelled schedule; a new order is the only way back.
+ */
+export type EcpayPeriodAction = "ReAuth" | "Cancel";
+
+export interface EcpayPeriodActionInput {
+  orderId: string;
+  action: EcpayPeriodAction;
+}
+
+export interface EcpayPeriodActionResult {
+  action: EcpayPeriodAction;
+  rtnCode: number;
+  rtnMsg: string;
+  merTradeNo?: string;
+  raw: Record<string, unknown>;
+}
+
+/**
+ * One authorization attempt from a 定期定額 schedule.
+ *
+ * **Undocumented** — doc 9093's field list does not mention `ExecLog` at all, but the
+ * query really returns it, and it is the only place the per-cycle history exists:
+ * counters tell you *how many* cycles succeeded, this tells you *which*, when, for how
+ * much, and under which `TradeNo`. Reconciliation needs the latter.
+ */
+export interface EcpayPeriodExecution {
+  /** `1` = this cycle authorized. */
+  rtnCode?: number;
+  amount?: number;
+  /** 授權單號 for this cycle. */
+  gwsr?: number;
+  processDate?: string;
+  authCode?: string;
+  /** Each cycle gets its own gateway trade number. */
+  tradeNo?: string;
+  chargeFee?: number;
+}
+
+/** A 定期定額 order as the query reports it: the order, the card, and the progress. */
+export interface EcpayPeriodOrder {
+  merTradeNo: string;
+  tradeNo?: string;
+  /** First-cycle amount. Later cycles use {@link EcpayPeriodProgress.periodAmount}. */
+  amount?: number;
+  status: string;
+  tradeDate?: string;
+  paidAt?: string;
+  card?: EcpayAuthCardInfo;
+  period?: EcpayPeriodProgress;
+  /**
+   * Whether the schedule is still running. **Undocumented** — doc 9093 never mentions
+   * `ExecStatus`, but the meaning was pinned by querying the same two orders before and
+   * after `Cancel`: `"1"` while active, `"0"` once stopped. Surfaced as the raw string
+   * because only those two values have been observed, and inventing a wider vocabulary
+   * would be guessing. Prefer {@link EcpayPeriodOrder.isActive} for the common check.
+   */
+  execStatus?: string;
+  /**
+   * `execStatus === "1"`. Note that `status`/`TradeStatus` does **not** answer this: a
+   * cancelled schedule whose first cycle succeeded still reports the trade as paid.
+   */
+  isActive: boolean;
+  /** Per-cycle history, oldest first. Empty when the query returns none. */
+  executions: EcpayPeriodExecution[];
+  rtnCode: number;
+  rtnMsg: string;
+  raw: Record<string, unknown>;
 }
 
 export type EcpayBackAuthCreateInput = CreatePaymentRequest & EcpayBackAuthFields;
@@ -146,6 +266,10 @@ export interface EcpayAuthCardInfo {
   issuingBank?: string;
   issuingBankCode?: string;
   installments?: number;
+  /** 首期金額, returned for instalment orders. */
+  firstAmount?: number;
+  /** 各期金額, returned for instalment orders. */
+  eachAmount?: number;
 }
 
 /**
@@ -189,6 +313,12 @@ export interface EcpayBackAuthAuthorizedResult {
   chargeFee?: number;
   processFee?: number;
   card?: EcpayAuthCardInfo;
+  /**
+   * Present only when the request carried a {@link EcpayPeriodSchedule} — ECPay echoes
+   * the schedule back and already reports cycle 1 as charged, so a caller needs no
+   * follow-up query to confirm the schedule took effect.
+   */
+  period?: EcpayPeriodProgress;
   customField?: string;
   raw: Record<string, unknown>;
 }
@@ -248,6 +378,19 @@ export interface EcpayBackAuthProvider extends PaymentProvider {
    * `PaymentProvider` type can still reach this method without the narrowing.
    */
   refundPayment(input: EcpayBackAuthRefundInput): Promise<EcpayBackAuthDoActionResult>;
+  /**
+   * 定期定額訂單作業 — `ReAuth` or `Cancel`.
+   *
+   * ⚠️ `Cancel` is **irreversible**; ECPay cannot re-enable a stopped schedule.
+   * ⚠️ `ReAuth` only applies to the **latest** cycle.
+   */
+  creditCardPeriodAction(input: EcpayPeriodActionInput): Promise<EcpayPeriodActionResult>;
+  /**
+   * 定期定額查詢 — the same `Cashier/QueryTrade` endpoint {@link getPayment} uses, but
+   * returning the period progress that lives inside `CardInfo` and which the narrow
+   * {@link NormalizedPaymentData} shape cannot carry.
+   */
+  queryPeriodOrder(input: GetPaymentRequest): Promise<EcpayPeriodOrder>;
   /**
    * 查詢信用卡單筆明細紀錄 — the authorization/capture history behind an order.
    *
@@ -394,6 +537,17 @@ export function createEcpayBackAuthProvider(
           DirectCapture: input.directCapture ? "1" : "0",
           Redeem: input.redeem ? "Y" : "N",
           ...(input.installments ? { CreditInstallment: String(input.installments) } : {}),
+          ...(input.period
+            ? {
+                PeriodAmount: Math.round(input.period.amount),
+                PeriodType: input.period.type,
+                Frequency: input.period.frequency,
+                ExecTimes: input.period.execTimes,
+                // Each later cycle reports here; ECPay needs somewhere to post them, so
+                // fall back to ReturnURL rather than leaving cycles 2..n unreported.
+                PeriodReturnURL: input.period.returnUrl ?? input.notifyUrl,
+              }
+            : {}),
         },
         ConsumerInfo: {
           Phone: input.phone,
@@ -478,6 +632,91 @@ export function createEcpayBackAuthProvider(
       });
     },
 
+    async creditCardPeriodAction(input: EcpayPeriodActionInput): Promise<EcpayPeriodActionResult> {
+      // CREATE_PAYMENT, not GET_PAYMENT, even though this operates on an existing
+      // schedule. `ReAuth` retries the latest failed cycle, i.e. it authorizes money;
+      // `Cancel` mutates the schedule. Neither is a read, and the capability set has
+      // only CREATE/GET/REFUND — so guarding this with the read capability would say
+      // "a read-only provider may trigger a charge", which is the dangerous direction
+      // to be wrong in. Both are always present together today, so the choice is about
+      // what the guard *claims*, not about behaviour.
+      assertSupports(PROVIDER, capabilities, "CREATE_PAYMENT");
+      const { merchantId } = requireCredentials(config);
+      if (input.action !== "ReAuth" && input.action !== "Cancel") {
+        throw new PaymentError(
+          "VALIDATION",
+          `${MESSAGE_PREFIX} 定期定額作業 Action 需為 ReAuth 或 Cancel（收到 "${String(input.action)}"）`,
+          PROVIDER,
+        );
+      }
+      if (!input.orderId) {
+        throw new PaymentError(
+          "VALIDATION",
+          `${MESSAGE_PREFIX} 定期定額作業需要 orderId（MerchantTradeNo）`,
+          PROVIDER,
+        );
+      }
+
+      const decoded = await post(
+        ECPAY_BACKAUTH_PATHS.creditCardPeriodAction,
+        { MerchantID: merchantId, MerchantTradeNo: input.orderId, Action: input.action },
+        `CreditCardPeriodAction(${input.action})`,
+      );
+      assertRtnOk(decoded, `CreditCardPeriodAction(${input.action})`);
+
+      const rtnCode = Number(decoded.RtnCode);
+      return {
+        action: input.action,
+        rtnCode: Number.isFinite(rtnCode) ? rtnCode : -1,
+        rtnMsg: str(decoded.RtnMsg),
+        merTradeNo: text(decoded.MerchantTradeNo),
+        raw: decoded,
+      };
+    },
+
+    async queryPeriodOrder(input: GetPaymentRequest): Promise<EcpayPeriodOrder> {
+      assertSupports(PROVIDER, capabilities, "GET_PAYMENT");
+      const { merchantId } = requireCredentials(config);
+      if (!input.merTradeNo) {
+        throw new PaymentError(
+          "VALIDATION",
+          `${MESSAGE_PREFIX} 定期定額查詢需要 MerchantTradeNo`,
+          PROVIDER,
+        );
+      }
+
+      const decoded = await post(
+        ECPAY_BACKAUTH_PATHS.queryTrade,
+        { MerchantID: merchantId, MerchantTradeNo: input.merTradeNo },
+        "QueryTrade(period)",
+      );
+      assertRtnOk(decoded, "QueryTrade(period)");
+
+      const orderInfo = asRecord(decoded.OrderInfo);
+      const cardInfo = asRecord(decoded.CardInfo);
+      const rtnCode = Number(decoded.RtnCode);
+      const period = normalizePeriodProgress(cardInfo);
+      const execStatus = text(decoded.ExecStatus);
+
+      return {
+        merTradeNo: text(orderInfo.MerchantTradeNo) ?? input.merTradeNo,
+        tradeNo: text(orderInfo.TradeNo),
+        amount: asNumber(orderInfo.TradeAmt),
+        status: mapTradeStatus(str(orderInfo.TradeStatus)),
+        tradeDate: text(orderInfo.TradeDate),
+        paidAt: text(orderInfo.PaymentDate),
+        card: normalizeCardInfo(cardInfo),
+        // Only present on an order that really is 定期定額 — a one-off has no PeriodType.
+        period,
+        execStatus,
+        isActive: execStatus === "1",
+        executions: normalizeExecLog(decoded.ExecLog),
+        rtnCode: Number.isFinite(rtnCode) ? rtnCode : -1,
+        rtnMsg: str(decoded.RtnMsg),
+        raw: decoded,
+      };
+    },
+
     async queryCreditDetail(input: EcpayCreditDetailInput): Promise<EcpayCreditDetail> {
       assertSupports(PROVIDER, capabilities, "GET_PAYMENT");
       return queryEcpayCreditDetail(config, input);
@@ -505,18 +744,7 @@ function normalizeAuthorized(
   const cardInfo = asRecord(decoded.CardInfo);
   const rtnCode = Number(decoded.RtnCode);
 
-  const card: EcpayAuthCardInfo = {
-    authCode: text(cardInfo.AuthCode),
-    gwsr: asNumber(cardInfo.Gwsr),
-    processDate: text(cardInfo.ProcessDate),
-    amount: asNumber(cardInfo.Amount),
-    card6No: text(cardInfo.Card6No),
-    card4No: text(cardInfo.Card4No),
-    eci: asNumber(cardInfo.Eci),
-    issuingBank: text(cardInfo.IssuingBank),
-    issuingBankCode: text(cardInfo.IssuingBankCode),
-    installments: asNumber(cardInfo.Stage),
-  };
+  const card = normalizeCardInfo(cardInfo);
 
   return {
     mode: "authorized",
@@ -531,13 +759,154 @@ function normalizeAuthorized(
     paidAt: text(orderInfo.PaymentDate),
     chargeFee: asNumber(orderInfo.ChargeFee),
     processFee: asNumber(orderInfo.ProcessFee),
-    card: (card.authCode ?? card.card4No) ? card : undefined,
+    card,
+    // The create response echoes the schedule and already counts cycle 1 as charged,
+    // so a 定期定額 caller gets the progress without a follow-up query. `undefined` on
+    // an ordinary one-off, which has no PeriodType.
+    period: normalizePeriodProgress(cardInfo),
     customField: text(decoded.CustomField),
     raw: decoded,
   };
 }
 
-/** Validates the request and returns the normalized card to put on the wire. */
+/** Masked card + bank + instalment data. Shared by the authorize and query paths. */
+function normalizeCardInfo(cardInfo: Record<string, unknown>): EcpayAuthCardInfo | undefined {
+  const card: EcpayAuthCardInfo = {
+    authCode: text(cardInfo.AuthCode),
+    gwsr: asNumber(cardInfo.Gwsr),
+    processDate: text(cardInfo.ProcessDate),
+    amount: asNumber(cardInfo.Amount),
+    card6No: text(cardInfo.Card6No),
+    card4No: text(cardInfo.Card4No),
+    eci: asNumber(cardInfo.Eci),
+    issuingBank: text(cardInfo.IssuingBank),
+    issuingBankCode: text(cardInfo.IssuingBankCode),
+    installments: asNumber(cardInfo.Stage),
+    firstAmount: asNumber(cardInfo.Stast),
+    eachAmount: asNumber(cardInfo.Staed),
+  };
+  // Keyed off the fields that only exist once a card was actually charged, so a
+  // response with an empty CardInfo does not surface an all-undefined object.
+  return (card.authCode ?? card.card4No) ? card : undefined;
+}
+
+/**
+ * `ExecLog` is undocumented, so treat its absence and its shape defensively — an array
+ * when present, and `[]` rather than `undefined` so callers can always iterate.
+ */
+function normalizeExecLog(input: unknown): EcpayPeriodExecution[] {
+  if (!Array.isArray(input)) return [];
+  return (input as unknown[]).map((row) => {
+    const r = asRecord(row);
+    return {
+      rtnCode: asNumber(r.RtnCode),
+      amount: asNumber(r.Amount),
+      gwsr: asNumber(r.Gwsr),
+      processDate: text(r.ProcessDate),
+      authCode: text(r.AuthCode),
+      tradeNo: text(r.TradeNo),
+      chargeFee: asNumber(r.ChargeFee),
+    };
+  });
+}
+
+/**
+ * Period progress lives in `CardInfo`, not its own object. `PeriodType` is the marker
+ * that an order really is 定期定額 — a one-off authorization has none, and returning a
+ * progress object full of `undefined` would make a caller think it does.
+ */
+function normalizePeriodProgress(
+  cardInfo: Record<string, unknown>,
+): EcpayPeriodProgress | undefined {
+  const type = text(cardInfo.PeriodType);
+  if (!type) return undefined;
+  return {
+    type,
+    frequency: asNumber(cardInfo.Frequency),
+    execTimes: asNumber(cardInfo.ExecTimes),
+    periodAmount: asNumber(cardInfo.PeriodAmount),
+    totalSuccessTimes: asNumber(cardInfo.TotalSuccessTimes),
+    totalSuccessAmount: asNumber(cardInfo.TotalSuccessAmount),
+  };
+}
+
+/**
+ * `Frequency` and `ExecTimes` bounds depend on `PeriodType`, so a shared range would be
+ * wrong for two of the three.
+ *
+ * Taken from ECPay itself rather than the docs: probing out-of-range values on stage
+ * makes it state each range verbatim, and it contradicts the documentation in one
+ * important way — **`ExecTimes` starts at 2, not 1.** Doc 45958 gives only the maxima, so
+ * a single-charge "schedule" looks legal and is rejected as `10100226`/`227`/`228`.
+ *
+ * Verified 2026-08-01:
+ *   D → Frequency 1-365, ExecTimes 2-999
+ *   M → Frequency 1-12,  ExecTimes 2-999
+ *   Y → Frequency **exactly 1**, ExecTimes 2-99
+ */
+const PERIOD_RULES = {
+  D: { minFrequency: 1, maxFrequency: 365, maxExecTimes: 999, label: "天" },
+  M: { minFrequency: 1, maxFrequency: 12, maxExecTimes: 999, label: "月" },
+  Y: { minFrequency: 1, maxFrequency: 1, maxExecTimes: 99, label: "年" },
+} as const satisfies Record<
+  EcpayPeriodSchedule["type"],
+  { minFrequency: number; maxFrequency: number; maxExecTimes: number; label: string }
+>;
+
+/**
+ * ECPay's own minimum. A 定期定額 order with one authorization is not recurring, so it is
+ * rejected — the same value the docs imply is fine.
+ */
+const MIN_EXEC_TIMES = 2;
+
+function assertPeriodSchedule(period: EcpayPeriodSchedule): void {
+  const rule = PERIOD_RULES[period.type];
+  if (!rule) {
+    throw new PaymentError(
+      "VALIDATION",
+      `${MESSAGE_PREFIX} period.type 需為 D / M / Y（收到 "${String(period.type)}"）`,
+      PROVIDER,
+    );
+  }
+  const amount = Math.round(period.amount);
+  if (!Number.isFinite(amount) || amount <= 0) {
+    throw new PaymentError(
+      "VALIDATION",
+      `${MESSAGE_PREFIX} period.amount 需為正整數（收到 ${String(period.amount)}）`,
+      PROVIDER,
+    );
+  }
+  if (
+    !Number.isInteger(period.frequency) ||
+    period.frequency < rule.minFrequency ||
+    period.frequency > rule.maxFrequency
+  ) {
+    const range =
+      rule.minFrequency === rule.maxFrequency
+        ? `必須為 ${rule.maxFrequency}`
+        : `需為 ${rule.minFrequency}-${rule.maxFrequency} ${rule.label}的整數`;
+    throw new PaymentError(
+      "VALIDATION",
+      `${MESSAGE_PREFIX} period.frequency（${period.type}）${range}` +
+        `（收到 ${String(period.frequency)}）`,
+      PROVIDER,
+    );
+  }
+  if (
+    !Number.isInteger(period.execTimes) ||
+    period.execTimes < MIN_EXEC_TIMES ||
+    period.execTimes > rule.maxExecTimes
+  ) {
+    throw new PaymentError(
+      "VALIDATION",
+      `${MESSAGE_PREFIX} period.execTimes（${period.type}）需為 ` +
+        `${MIN_EXEC_TIMES}-${rule.maxExecTimes} 的整數（收到 ${String(period.execTimes)}）；` +
+        "定期定額至少要執行 2 次",
+      PROVIDER,
+    );
+  }
+}
+
 function assertCreateInput(input: EcpayBackAuthCreateInput): EcpayCardDetails {
   if (input.currency && input.currency !== "TWD") {
     throw new PaymentError("VALIDATION", `${MESSAGE_PREFIX} 僅支援 TWD`, PROVIDER);
@@ -586,6 +955,16 @@ function assertCreateInput(input: EcpayBackAuthCreateInput): EcpayCardDetails {
       `${MESSAGE_PREFIX} ConsumerInfo 需要 phone 與 cardholderName`,
       PROVIDER,
     );
+  }
+  if (input.period) {
+    if (input.installments) {
+      throw new PaymentError(
+        "VALIDATION",
+        `${MESSAGE_PREFIX} period 與 installments 不可併用（一個是分期付款，一個是定期定額）`,
+        PROVIDER,
+      );
+    }
+    assertPeriodSchedule(input.period);
   }
   return normalizeCard(input.card);
 }
@@ -667,6 +1046,16 @@ const RTN_ERRORS: Record<string, { code: PaymentErrorCode; message: string }> = 
   "10100255": { code: "PROVIDER", message: "報失卡，請客戶更換卡片重新交易" },
   "10100256": { code: "PROVIDER", message: "被盜用卡，請客戶更換卡片重新交易" },
   "10000185": { code: "NOT_FOUND", message: "查無交易資料" },
+  // Verified on stage 2026-08-01 — one code per (field, PeriodType) pair.
+  "10100223": { code: "VALIDATION", message: "Frequency 需為 1-365（PeriodType=D）" },
+  "10100224": { code: "VALIDATION", message: "Frequency 需為 1-12（PeriodType=M）" },
+  "10100225": { code: "VALIDATION", message: "Frequency 必須為 1（PeriodType=Y）" },
+  "10100226": { code: "VALIDATION", message: "ExecTimes 需為 2-999（PeriodType=D）" },
+  "10100227": { code: "VALIDATION", message: "ExecTimes 需為 2-999（PeriodType=M）" },
+  "10100228": { code: "VALIDATION", message: "ExecTimes 需為 2-99（PeriodType=Y）" },
+  // Verified: ReAuth on a cancelled schedule. Cancel is irreversible, so this is
+  // terminal — CONFLICT rather than something to retry.
+  "100006": { code: "CONFLICT", message: "該訂單已停用，無法補授權" },
 };
 
 function assertRtnOk(decoded: Record<string, unknown>, label: string): void {

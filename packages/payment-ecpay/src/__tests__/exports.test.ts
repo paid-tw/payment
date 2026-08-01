@@ -45,6 +45,13 @@ describe("package entry points", () => {
     expect(backauthEntry).toHaveProperty("ECPAY_TEST_CARD");
   });
 
+  it("exports the whole 定期定額 surface from the subpath", () => {
+    // The gap this closes: a caller following the README would have had to reach into
+    // `dist/backauth/notify.js` for the cycle-notify verifier, because the docs
+    // advertised it while the entry point did not export it.
+    expect(backauthEntry).toHaveProperty("verifyEcpayPeriodNotify");
+  });
+
   it("does not duplicate the shared adapters onto the subpath", () => {
     // The subpath is the raw-PAN adapter only; it must not become a second front door
     // to the whole package.

@@ -126,7 +126,11 @@ const form = await ecpay.createPayment({
 import { verifyEcpayPaymentInfoNotify, ECPAY_NOTIFY_ACK } from "@paid-tw/payment-ecpay";
 
 app.post("/ecpay/paid-info", (req, res) => {
-  const info = verifyEcpayPaymentInfoNotify(req.body, { hashKey, hashIv, merchantId });
+  const info = verifyEcpayPaymentInfoNotify(req.body, {
+    hashKey,
+    hashIv,
+    merchantId,
+  });
   if (info.success) {
     // info.atm?.vAccount / info.cvs?.paymentNo / info.barcode?.barcode1..3
   }
@@ -263,7 +267,10 @@ ATM 天數傳，會拿到完全不同期限的帳號。超過 30 天需另向綠
 消費者不想在超商機台輸入代碼時，可以把 `paymentNo` 轉成可掃的三段條碼：
 
 ```ts
-const bar = await paycode.getCvsBarcode({ paymentNo: "LLL26213917403", chain: "iBon" });
+const bar = await paycode.getCvsBarcode({
+  paymentNo: "LLL26213917403",
+  chain: "iBon",
+});
 // bar.barcode1/2/3 + bar.expireDate
 ```
 
@@ -361,7 +368,12 @@ const result = await backauth.createPayment({
   itemDesc: "測試商品",
   notifyUrl: "https://example.com/ecpay/backauth/notify",
   orderResultUrl: "https://example.com/ecpay/backauth/result", // ⚠️ 必填，見下
-  card: { cardNo: "4311952222222222", expiryMonth: "12", expiryYear: "30", cvv: "222" },
+  card: {
+    cardNo: "4311952222222222",
+    expiryMonth: "12",
+    expiryYear: "30",
+    cvv: "222",
+  },
   phone: "886912345678",
   cardholderName: "TEST USER",
 });
@@ -398,8 +410,81 @@ sandbox 設定下 adapter 會直接丟 `UNSUPPORTED`，不會發一個註定 404
 
 ⚠️ 別跟 `gwsr` 搞混：`gwsr`（notify 的 `creditRefundId`）是銀行授權碼，DoAction
 **不吃這個欄位**（文件 45919 的請求參數只有 MerchantID / MerchantTradeNo / TradeNo /
-Action / TotalAmount）。`gwsr` 是「信用卡單筆明細查詢」和對帳用的，那支 API 本 adapter
-尚未實作。
+Action / TotalAmount）。`gwsr` 是「信用卡單筆明細查詢」和對帳用的 —— 那支 API 現在是
+`queryCreditDetail()`（回傳的 `tradeId` 就等於這個 `gwsr`）。
+
+### 定期定額
+
+定期定額**沒有獨立的建立 API**：它就是一般的 `BackAuth`，在 `CardInfo` 裡多帶四個欄位。
+查詢也還是同一支 `QueryTrade`，只是回應多幾個欄位。所以真正新增的端點只有
+`CreditCardPeriodAction`。
+
+```ts
+const result = await backauth.createPayment({
+  amount: 300, // 首期金額
+  currency: "TWD",
+  method: "card",
+  orderId: "SUB123",
+  itemDesc: "月訂閱",
+  notifyUrl: "https://example.com/ecpay/backauth/notify",
+  orderResultUrl: "https://example.com/ecpay/backauth/result",
+  card: {
+    cardNo: "4311952222222222",
+    expiryMonth: "12",
+    expiryYear: "30",
+    cvv: "222",
+  },
+  phone: "886912345678",
+  cardholderName: "TEST USER",
+  // 每 1 個月扣一次，共 12 期（含當下這期）
+  period: { amount: 300, type: "M", frequency: 1, execTimes: 12 },
+});
+
+// ⚠️ 第 1 期在這裡就已經扣掉了
+console.log(result.period?.totalSuccessTimes); // 1
+
+// 查進度（含每期明細）
+const order = await backauth.queryPeriodOrder({ merTradeNo: "SUB123" });
+console.log(order.isActive, order.period?.totalSuccessAmount);
+for (const exec of order.executions) {
+  console.log(exec.processDate, exec.amount, exec.tradeNo); // 每期各有自己的 tradeNo
+}
+
+// 停用（不可逆）
+await backauth.creditCardPeriodAction({ orderId: "SUB123", action: "Cancel" });
+```
+
+`type` / `frequency` / `execTimes` 的合法範圍（adapter 會在送出前擋掉）：
+
+| `type` | `frequency` | `execTimes` |
+| ------ | ----------- | ----------- |
+| `"D"`  | 1–365 天    | 2–999       |
+| `"M"`  | 1–12 月     | 2–999       |
+| `"Y"`  | 只能 1      | 2–99        |
+
+#### 定期定額實測踩到的雷
+
+1. **`execTimes` 最小是 2，不是 1。** 文件 9093 寫「2-999」看起來像筆誤（旁邊 Frequency
+   是 1 開始），但送 1 真的會被拒。
+2. **第 1 期在建立當下就扣款了。** 建立的回應裡 `TotalSuccessTimes` 已經是 1、也有
+   `Gwsr`。所以 `execTimes: 12` 是「現在這期 + 之後 11 期」，不是「未來 12 期」。測試會
+   真的產生一筆扣款。
+3. **`ExecLog` 文件完全沒寫，但它是唯一的每期明細。** 計數器只告訴你「成功幾期」，只有
+   `ExecLog` 告訴你「哪幾期、什麼時候、多少錢、哪個 `TradeNo`」—— 對帳需要的正是後者。
+   本 adapter 把它開成 `order.executions`。
+4. **`ExecStatus` 文件也沒寫，它才是「這個定期定額還在跑嗎」的答案**（`"1"` 執行中、
+   `"0"` 已停用）。開成 `order.isActive`。**不能用 `status`/`TradeStatus` 代替** ——
+   停用後它還是 `"1"`（已付款），因為第 1 期真的扣成功了。
+5. **期別欄位放在 `CardInfo` 裡**（request 和 response 都是），沒有 `PeriodInfo` 這種
+   容器。放錯不會報錯：綠界會當成一般單筆授權，而你以為定期定額建好了。
+6. **`Cancel` 不可逆**，沒有恢復的 API。停用後再 `ReAuth` 會拿到
+   `100006 該訂單狀態為停用中`（adapter 對應成 `CONFLICT`，不是可重試的錯誤）。
+7. **`Cancel` 成功訊息是中文「停用成功」**，而同一個服務其他端點回英文 `"Succeeded."`。
+   所以判斷成功只能看 `RtnCode`，永遠不要比對 `RtnMsg` 文字。
+
+⚠️ 測試定期定額會留下**會持續扣款**的訂單，而綠界沒有刪除訂單的 API。本套件的 live
+測試因此只開最小的排程（`Y`／1／2 期、5 元），在 `afterAll` 停用（即使測試中途失敗也
+會停），停用後還會再查一次確認，沒停掉就直接把訂單編號印出來讓你手動處理。
 
 ### 測試卡與測試特店
 

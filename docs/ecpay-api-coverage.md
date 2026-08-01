@@ -174,16 +174,16 @@ subpath**, not the package root. ⚠️ **Raw-PAN adapter — PCI-DSS SAQ D**, u
 other adapter here; the separate entry point lets a build prove by import graph that it
 excludes the card-accepting surface.
 
-| Doc                                                          | Endpoint (`ecpayment(-stage)…`)         | Status                                                              |
-| ------------------------------------------------------------ | --------------------------------------- | ------------------------------------------------------------------- |
-| [信用卡卡號交易授權](https://developers.ecpay.com.tw/45958)  | `POST /1.0.0/Cashier/BackAuth`          | ✅ `createPayment` → `mode: "3ds" \| "authorized"`                  |
-| [付款結果通知](https://developers.ecpay.com.tw/45907)        | ReturnURL (AES-JSON, `1\|OK`)           | ✅ `verifyPaymentNotify`                                            |
-| [查詢訂單](https://developers.ecpay.com.tw/45927)            | `POST /1.0.0/Cashier/QueryTrade`        | ✅ `getPayment`                                                     |
-| [信用卡請退款](https://developers.ecpay.com.tw/45919)        | `POST /1.0.0/Credit/DoAction`           | ✅ `creditDoAction` — **production only**, stage does not expose it |
-| [查詢信用卡發卡行](https://developers.ecpay.com.tw/49623)    | `/1.0.0/Cashier/QueryCardInfo`          | ❌                                                                  |
-| [查詢信用卡單筆明細](https://developers.ecpay.com.tw/45925)  | `/1.0.0/CreditDetail/QueryTrade`        | ❌                                                                  |
-| [定期定額查詢 / 作業](https://developers.ecpay.com.tw/46100) | `QueryTrade` / `CreditCardPeriodAction` | ❌ (create accepts the period fields; management does not)          |
-| [下載撥款對帳檔](https://developers.ecpay.com.tw/45931)      | `/1.0.0/Cashier/QueryTradeMedia`        | ❌ (the 幕後取號 provider has the equivalent)                       |
+| Doc                                                          | Endpoint (`ecpayment(-stage)…`)         | Status                                                                         |
+| ------------------------------------------------------------ | --------------------------------------- | ------------------------------------------------------------------------------ |
+| [信用卡卡號交易授權](https://developers.ecpay.com.tw/45958)  | `POST /1.0.0/Cashier/BackAuth`          | ✅ `createPayment` → `mode: "3ds" \| "authorized"`                             |
+| [付款結果通知](https://developers.ecpay.com.tw/45907)        | ReturnURL (AES-JSON, `1\|OK`)           | ✅ `verifyPaymentNotify`                                                       |
+| [查詢訂單](https://developers.ecpay.com.tw/45927)            | `POST /1.0.0/Cashier/QueryTrade`        | ✅ `getPayment`                                                                |
+| [信用卡請退款](https://developers.ecpay.com.tw/45919)        | `POST /1.0.0/Credit/DoAction`           | ✅ `creditDoAction` — **production only**, stage does not expose it            |
+| [查詢信用卡發卡行](https://developers.ecpay.com.tw/49623)    | `/1.0.0/Cashier/QueryCardInfo`          | ❌                                                                             |
+| [查詢信用卡單筆明細](https://developers.ecpay.com.tw/45925)  | `/1.0.0/CreditDetail/QueryTrade`        | ❌                                                                             |
+| [定期定額查詢 / 作業](https://developers.ecpay.com.tw/46100) | `QueryTrade` / `CreditCardPeriodAction` | ✅ `createPayment({ period })` / `queryPeriodOrder` / `creditCardPeriodAction` |
+| [下載撥款對帳檔](https://developers.ecpay.com.tw/45931)      | `/1.0.0/Cashier/QueryTradeMedia`        | ❌ (the 幕後取號 provider has the equivalent)                                  |
 
 Stage-verified 2026-08-01 against **both** published test merchants, since they take
 different paths: `2000132` (3D off) authorizes directly, `3002607` (3D on) returns a
@@ -197,8 +197,7 @@ different paths: `2000132` (3D off) authorizes directly, `3002607` (3D on) retur
   幕後取號 table — error tables must stay per-service
 - `IssuingBank` is English on stage; `ChargeFee` fractional; `ProcessFee` present
 
-Not implemented: 定期定額 management (`CreditCardPeriodAction`) and the BackAuth-side
-`QueryTradeMedia`.
+Not implemented: the BackAuth-side `QueryTradeMedia`.
 
 ---
 
@@ -216,7 +215,7 @@ endpoints twice**, so these are not two implementations.
 | ECPG [9088](https://developers.ecpay.com.tw/9088) + 幕後授權 [45925](https://developers.ecpay.com.tw/45925) | `/1.0.0/CreditDetail/QueryTrade`        | same endpoint, two doc trees                                                                     |
 | 幕後授權 [49623](https://developers.ecpay.com.tw/49623)                                                     | `/1.0.0/Credit/QueryCardInfo`           | 閘道商-only                                                                                      |
 | ECPG [9093](https://developers.ecpay.com.tw/9093) 定期定額查詢                                              | `/1.0.0/Cashier/QueryTrade`             | **already the endpoint** paycode/BackAuth call — a response-shape difference, not a new endpoint |
-| ECPG [12130](https://developers.ecpay.com.tw/12130) 定期定額作業                                            | `/1.0.0/Cashier/CreditCardPeriodAction` | open                                                                                             |
+| ECPG [12130](https://developers.ecpay.com.tw/12130) 定期定額作業                                            | `/1.0.0/Cashier/CreditCardPeriodAction` | ✅ `creditCardPeriodAction` — `ReAuth` / `Cancel`                                                |
 
 Stage-verified 2026-08-01 across **three** published merchants (`2000132` no-3D,
 `3002607` with-3D, `3085779` 閘道商). Deviations found, documented in
@@ -236,6 +235,53 @@ Stage-verified 2026-08-01 across **three** published merchants (`2000132` no-3D,
 
 Not stage-reachable, so doc-derived and labelled: a **captured** order (`CloseData` as a
 populated array), because capture needs `Credit/DoAction`, which stage does not expose.
+
+---
+
+## 定期定額 (recurring credit) — landed on 幕後授權
+
+**Status: landed.** `createPayment({ period })` starts a schedule, `queryPeriodOrder`
+reads its progress, `creditCardPeriodAction` does `ReAuth` / `Cancel`. It lives on the
+幕後授權 provider (`@paid-tw/payment-ecpay/backauth`) because starting a schedule needs a
+raw PAN — the same PCI-DSS boundary as the rest of that subpath.
+
+There is **no** dedicated create endpoint: a schedule is an ordinary `BackAuth` call
+with four extra fields inside `CardInfo`, and the query is the same `QueryTrade` every
+other adapter uses, returning extra fields. So the only genuinely new endpoint is
+`CreditCardPeriodAction`.
+
+Stage-verified 2026-08-01 on merchant `2000132` by running the full lifecycle
+(create → query → Cancel → ReAuth). Findings, all recorded in `backauth-fixtures.ts`:
+
+- **`ExecTimes` minimum is 2, not 1.** Doc 9093's ranges read like typos beside
+  Frequency's 1-based ones; 1 is genuinely rejected. Found by probing out-of-range
+  values deliberately, which is now blocked before the network.
+- **Cycle 1 is charged at create time** — the create response already carries
+  `TotalSuccessTimes: 1` and a `Gwsr`. `execTimes: 2` means "now plus one more".
+- **`ExecLog` is undocumented and is the only per-cycle history.** Doc 9093 omits it
+  entirely. The counters say how many cycles succeeded; only this says which, when, for
+  how much, and under which `TradeNo` — each cycle gets its own. Surfaced as
+  `EcpayPeriodOrder.executions`.
+- **`ExecStatus` is undocumented and is the schedule's active flag** — `"1"` running,
+  `"0"` cancelled, pinned by querying the same orders before and after `Cancel`.
+  Surfaced as `isActive`, because `TradeStatus` cannot substitute: it stays `"1"` (paid)
+  on a cancelled schedule, since cycle 1 really was charged.
+- **Period fields live inside `CardInfo`** on both the request and the response — there
+  is no `PeriodInfo` container. Getting this wrong fails silently: ECPay authorizes a
+  one-off and the caller believes a schedule exists.
+- **`Cancel` is irreversible.** A later `ReAuth` is `100006 "該訂單狀態為停用中"`, mapped
+  to `CONFLICT` so it does not look retryable. There is no resume endpoint.
+- `Cancel` succeeds with the Chinese `"停用成功"` while the rest of BackAuth answers
+  `"Succeeded."` — mixed languages in one service, so no code may match on `RtnMsg`.
+
+Not reachable on stage, and therefore covered offline only: a **second cycle actually
+firing**, and `ReAuth` against a genuinely failed cycle. The shortest cadence is one day.
+
+⚠️ The live suite (`pnpm test:live:ecpay:period`) is the one suite here whose subject has
+a _continuing_ effect — ECPay keeps charging a schedule and offers no delete. It creates
+only the smallest legal schedule (`Y`/1/2, 5 TWD), cancels in `afterAll` so a mid-suite
+failure still stops it, then **verifies** the cancel and fails loudly with the order ids
+if anything is still active.
 
 ---
 
@@ -289,7 +335,7 @@ Capabilities to add later:
 
 ### P3 — long tail
 
-10. Period / installment / bind-card / reconcile downloads.
+10. Installment / bind-card / reconcile downloads. (Period landed — see 定期定額 above.)
 
 ---
 
@@ -342,6 +388,6 @@ doc-derived fixtures only, which no other adapter in this package relies on.
 **Conclusion:** four paths are stage-tested — AIO core (create redirect + query +
 credit refund R + MAC), ECPG core (GetToken + CreatePayment + notify), and
 非信用卡幕後取號 (all 6 endpoints), and 信用卡幕後授權 (authorize + query + notify;
-請退款 is production-only by ECPay's design). Coverage is still **not** complete against
-ECPay's full surface: most ECPG card-on-file/period APIs, 定期定額 management,
-`QueryCardInfo`, and many AIO payment methods/params remain missing.
+請退款 is production-only by ECPay's design), plus the 信用卡查詢 pair and the full
+定期定額 lifecycle. Coverage is still **not** complete against ECPay's full surface: most
+ECPG card-on-file (綁卡) APIs and many AIO payment methods/params remain missing.
