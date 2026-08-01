@@ -44,3 +44,32 @@ export type { ZingalaOrderState, ZingalaResultMeta } from "./codes.js";
 
 export { availablePeriods, calculateInstalmentPlan, findFeeOption } from "./fee.js";
 export type { ZingalaFeeOption, ZingalaFeeSchedule, ZingalaInstalmentPlan } from "./fee.js";
+
+export { createZingalaClient } from "./provider.js";
+export type {
+  ZingalaApplication,
+  ZingalaApplyInput,
+  ZingalaBank,
+  ZingalaCaptureResult,
+  ZingalaClient,
+  ZingalaMemberCheck,
+  ZingalaOrder,
+  ZingalaRefundResult,
+} from "./provider.js";
+
+export {
+  buildZingalaConfirmResponse,
+  verifyZingalaConfirmRequest,
+  verifyZingalaNotify,
+  ZINGALA_NOTIFY_ACK,
+} from "./notify.js";
+export type {
+  ZingalaConfirmRequest,
+  ZingalaNotify,
+  ZingalaNotifyCredentials,
+  ZingalaNotifyHeaders,
+  ZingalaNotifyOptions,
+} from "./notify.js";
+
+export { zingalaPost, zingalaPostForBytes } from "./client.js";
+export type { ZingalaEnvelope, ZingalaRequestOptions } from "./client.js";
