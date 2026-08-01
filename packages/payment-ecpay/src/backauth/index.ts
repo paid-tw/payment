@@ -30,6 +30,13 @@ export type {
   EcpayBackAuthRefundInput,
   EcpayBackAuthResult,
   EcpayCardDetails,
+  EcpayPeriodAction,
+  EcpayPeriodActionInput,
+  EcpayPeriodActionResult,
+  EcpayPeriodExecution,
+  EcpayPeriodOrder,
+  EcpayPeriodProgress,
+  EcpayPeriodSchedule,
 } from "./provider.js";
 export {
   ECPAY_BACKAUTH_ORIGINS,
@@ -39,9 +46,14 @@ export {
   resolveBackAuthOrigin,
 } from "./config.js";
 export type { EcpayBackAuthProviderConfig } from "./config.js";
-export { ECPAY_BACKAUTH_NOTIFY_ACK, verifyEcpayBackAuthNotify } from "./notify.js";
+export {
+  ECPAY_BACKAUTH_NOTIFY_ACK,
+  verifyEcpayBackAuthNotify,
+  verifyEcpayPeriodNotify,
+} from "./notify.js";
 export type {
   EcpayBackAuthNotify,
   EcpayBackAuthNotifyCredentials,
   EcpayBackAuthNotifyEnvelope,
+  EcpayPeriodNotify,
 } from "./notify.js";
