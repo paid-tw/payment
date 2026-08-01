@@ -76,3 +76,45 @@ export type {
   EcpayPayCodeNotifyCredentials,
   EcpayPayCodeNotifyEnvelope,
 } from "./paycode/notify.js";
+
+// 信用卡幕後授權 (BackAuth) — separate factory / name "ecpay-backauth"
+//
+// ⚠️ This adapter accepts a raw card number. *Calling* it puts the calling process in
+// PCI-DSS SAQ D scope; the other three ECPay adapters never see card data.
+//
+// Note what this separation does and does not give you today: BackAuth is a separate
+// factory and module, so you choose whether to *use* it — but it is re-exported here
+// and the package publishes only the `"."` entry, so importing the package root does
+// load this module. Scope follows from handling card data, not from the code being
+// present, so that is not itself a compliance problem; it does mean you cannot prove
+// by import graph alone that an app excludes the raw-PAN surface. A `./backauth`
+// subpath export would allow that — see PR #3 discussion.
+export { createEcpayBackAuthProvider } from "./backauth/provider.js";
+export type {
+  EcpayAuthCardInfo,
+  EcpayBackAuth3DSResult,
+  EcpayBackAuthAction,
+  EcpayBackAuthAuthorizedResult,
+  EcpayBackAuthCreateInput,
+  EcpayBackAuthDoActionInput,
+  EcpayBackAuthDoActionResult,
+  EcpayBackAuthFields,
+  EcpayBackAuthProvider,
+  EcpayBackAuthRefundInput,
+  EcpayBackAuthResult,
+  EcpayCardDetails,
+} from "./backauth/provider.js";
+export {
+  ECPAY_BACKAUTH_ORIGINS,
+  ECPAY_BACKAUTH_PATHS,
+  ECPAY_SANDBOX_NO_3D,
+  ECPAY_TEST_CARD,
+  resolveBackAuthOrigin,
+} from "./backauth/config.js";
+export type { EcpayBackAuthProviderConfig } from "./backauth/config.js";
+export { ECPAY_BACKAUTH_NOTIFY_ACK, verifyEcpayBackAuthNotify } from "./backauth/notify.js";
+export type {
+  EcpayBackAuthNotify,
+  EcpayBackAuthNotifyCredentials,
+  EcpayBackAuthNotifyEnvelope,
+} from "./backauth/notify.js";

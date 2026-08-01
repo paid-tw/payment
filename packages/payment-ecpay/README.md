@@ -81,16 +81,17 @@ ECPAY_LIVE=1 ECPAY_QUERY_ID=yourMerTradeNo PAID_DEBUG=1 pnpm test:live:ecpay
 
 MSW 的 default handlers 會對已知 `MerchantTradeNo` 重放 field-exact fixtures（與 live 同一組 HashKey/HashIV），方便在無網路時重現 stage 行為。
 
-## 三套 API 與區隔方式
+## 四套 API 與區隔方式
 
-綠界金流有三條產品線，**同一 npm 套件、三個 factory、三個 `name`**（詳見
+綠界金流有四條產品線，**同一 npm 套件、四個 factory、四個 `name`**（詳見
 [`docs/ecpay-provider-separation.md`](../../docs/ecpay-provider-separation.md)）：
 
-| 系列                  | Factory                      | `name`            | Host               | create 結果                                 |
-| --------------------- | ---------------------------- | ----------------- | ------------------ | ------------------------------------------- |
-| **全方位金流 (AIO)**  | `createEcpayProvider`        | `"ecpay"`         | `payment.ecpay…`   | `{ mode: "redirect", action, params }`      |
-| **站內付 2.0 (ECPG)** | `createEcpayEcpgProvider`    | `"ecpay-ecpg"`    | `ecpg.ecpay…`      | `{ mode: "token", token, merchantTradeNo }` |
-| **非信用卡幕後取號**  | `createEcpayPayCodeProvider` | `"ecpay-paycode"` | `ecpayment.ecpay…` | `{ mode: "paycode", atm/cvs/barcode }`      |
+| 系列                  | Factory                       | `name`             | Host               | create 結果                                   |
+| --------------------- | ----------------------------- | ------------------ | ------------------ | --------------------------------------------- |
+| **全方位金流 (AIO)**  | `createEcpayProvider`         | `"ecpay"`          | `payment.ecpay…`   | `{ mode: "redirect", action, params }`        |
+| **站內付 2.0 (ECPG)** | `createEcpayEcpgProvider`     | `"ecpay-ecpg"`     | `ecpg.ecpay…`      | `{ mode: "token", token, merchantTradeNo }`   |
+| **非信用卡幕後取號**  | `createEcpayPayCodeProvider`  | `"ecpay-paycode"`  | `ecpayment.ecpay…` | `{ mode: "paycode", atm/cvs/barcode }`        |
+| **信用卡幕後授權** ⚠️ | `createEcpayBackAuthProvider` | `"ecpay-backauth"` | `ecpayment.ecpay…` | `{ mode: "3ds" }` 或 `{ mode: "authorized" }` |
 
 ```ts
 import { createEcpayEcpgProvider, ECPAY_SANDBOX } from "@paid-tw/payment-ecpay";
@@ -257,3 +258,89 @@ cloudflared tunnel --url http://localhost:8787   # 另一個 shell，取得公�
 超商繳費才拿得到。
 
 完整缺口表：[`docs/ecpay-api-coverage.md`](../../docs/ecpay-api-coverage.md)。
+
+## 信用卡幕後授權（BackAuth）⚠️ 收原始卡號
+
+### 先讀這段：PCI-DSS 範圍
+
+**這是本套件唯一會碰到原始卡號的 adapter。** 其他三條（AIO、站內付 2.0、幕後取號）卡號
+都不會經過你的主機，所以你落在 PCI-DSS **SAQ A**；一旦自己收卡號，就變成 **SAQ D**，
+稽核與基礎架構的要求完全不同等級。
+
+範圍是由「**你是否處理卡號**」決定，不是由「程式碼在不在 bundle 裡」決定 —— 所以只要
+不呼叫 `createEcpayBackAuthProvider`，你仍然在 SAQ A。但要注意目前的隔離程度：BackAuth
+是獨立 factory、獨立模組，可是它從套件根目錄 re-export，而且套件只發佈 `"."` 這一個
+entry，所以 `import "@paid-tw/payment-ecpay"` 會連帶載入這個模組。也就是說，你**無法只靠
+import graph 證明**某個 app 不含 raw-PAN 介面。若需要那種可稽核性，得加 `./backauth`
+subpath export（討論見 PR #3）。
+
+請確定你真的需要「後端直接拿卡號授權、消費者不看任何付款頁」這個能力，而不是因為它
+用起來比較方便。如果只是要收信用卡，用 AIO 或站內付 2.0。
+
+綠界端另有前置條件：需**申請關閉 OTP** 並**申請開啟信用卡 3D 驗證**才能使用。
+
+### 用法
+
+```ts
+import { createEcpayBackAuthProvider, ECPAY_SANDBOX_NO_3D } from "@paid-tw/payment-ecpay";
+
+const backauth = createEcpayBackAuthProvider({ ...ECPAY_SANDBOX_NO_3D });
+
+const result = await backauth.createPayment({
+  amount: 199,
+  currency: "TWD",
+  method: "card",
+  orderId: "ORDER123",
+  itemDesc: "測試商品",
+  notifyUrl: "https://example.com/ecpay/backauth/notify",
+  orderResultUrl: "https://example.com/ecpay/backauth/result", // ⚠️ 必填，見下
+  card: { cardNo: "4311952222222222", expiryMonth: "12", expiryYear: "30", cvv: "222" },
+  phone: "886912345678",
+  cardholderName: "TEST USER",
+});
+
+// ⚠️ 一定要先看 mode，不要先看 RtnCode
+if (result.mode === "3ds") {
+  redirectFullPage(result.threeDUrl); // 不可用 iframe
+} else {
+  console.log(result.success, result.card?.card4No, result.card?.gwsr);
+}
+```
+
+### 四個實測踩到的雷
+
+1. **3D 驗證的回應「沒有 `RtnCode`」。** 只有 `ThreeDURL`、`MerchantID`、
+   `MerchantTradeNo` 三個欄位。文件 45958 的 3D 章節有列 RtnCode，所以「先檢查
+   `RtnCode === 1`、再看 ThreeDURL」這個最直覺的寫法**會把正常的 3DS 轉導判成失敗**。
+   這就是回傳值設計成 discriminated union 的原因。
+2. **`OrderResultURL` 實際上必填**，文件沒標必填。沒帶會拿到
+   `RtnCode 5000029`，連 3D 關閉的特店也一樣。
+3. **`MerchantID` 在 3D 分支是數字、在授權分支是字串。** 同一支 API 同一個欄位。
+4. **刷卡失敗回 `RtnCode 10100058`，而這個號碼在「幕後取號」的代碼表裡是
+   「ATM 繳費期限已過」。** 綠界的錯誤碼跨服務會撞號，所以錯誤表必須分服務維護。
+
+### 請退款只有正式環境
+
+`creditDoAction()`（`C` 關帳 / `R` 退刷 / `E` 取消 / `N` 放棄）與 `refundPayment()`
+**只能在正式環境用** —— 綠界明講測試環境無法提供實際授權、因此不開放這支 API。所以
+sandbox 設定下 adapter 會直接丟 `UNSUPPORTED`，不會發一個註定 404 的請求。
+
+`refundPayment()` 需要你自己帶 `tradeNo`（綠界交易編號），不會偷偷先查一次 —— 退款
+路徑上多一次查詢值得講清楚。`tradeNo` 從授權結果（`result.tradeNo`）或 notify
+（`notify.tradeNo`）拿，**請保存它**。
+
+⚠️ 別跟 `gwsr` 搞混：`gwsr`（notify 的 `creditRefundId`）是銀行授權碼，DoAction
+**不吃這個欄位**（文件 45919 的請求參數只有 MerchantID / MerchantTradeNo / TradeNo /
+Action / TotalAmount）。`gwsr` 是「信用卡單筆明細查詢」和對帳用的，那支 API 本 adapter
+尚未實作。
+
+### 測試卡與測試特店
+
+`ECPAY_TEST_CARD` = `4311952222222222` / CVV `222`（綠界公開，非真卡）。有效月年必須
+**晚於當下**，所以測試要自己算，不要寫死年份。
+
+`ECPAY_SANDBOX_NO_3D` = 特店 `2000132`（3D **關閉**）。要測「直接授權成功」必須用它 ——
+預設的 `ECPAY_SANDBOX`（3002607）3D 是開的，每次都只會回 `ThreeDURL`。
+
+⚠️ adapter **刻意不做 Luhn 檢查**：綠界自己的測試卡號 Luhn 是不通過的，加了會讓官方
+測試卡不能用。只驗長度與數字。

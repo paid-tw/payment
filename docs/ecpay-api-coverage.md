@@ -164,8 +164,39 @@ Deviations from the docs found while recording, all documented in that fixtures 
 Only shape still doc-derived: a **genuinely paid** notify (`TradeStatus: "1"` with
 store fields), since 模擬付款 deliberately never settles.
 
-Not implemented (sibling product, same host): **信用卡幕後授權** `BackAuth` /
-`Credit/DoAction` / `CreditCardPeriodAction` / `QueryCardInfo`.
+---
+
+## 信用卡幕後授權 (BackAuth) — coverage
+
+**Status: core path landed** as `createEcpayBackAuthProvider` (`name: "ecpay-backauth"`),
+under `src/backauth/*`. ⚠️ **Raw-PAN adapter — PCI-DSS SAQ D**, unlike every other
+adapter here.
+
+| Doc                                                          | Endpoint (`ecpayment(-stage)…`)         | Status                                                              |
+| ------------------------------------------------------------ | --------------------------------------- | ------------------------------------------------------------------- |
+| [信用卡卡號交易授權](https://developers.ecpay.com.tw/45958)  | `POST /1.0.0/Cashier/BackAuth`          | ✅ `createPayment` → `mode: "3ds" \| "authorized"`                  |
+| [付款結果通知](https://developers.ecpay.com.tw/45907)        | ReturnURL (AES-JSON, `1\|OK`)           | ✅ `verifyPaymentNotify`                                            |
+| [查詢訂單](https://developers.ecpay.com.tw/45927)            | `POST /1.0.0/Cashier/QueryTrade`        | ✅ `getPayment`                                                     |
+| [信用卡請退款](https://developers.ecpay.com.tw/45919)        | `POST /1.0.0/Credit/DoAction`           | ✅ `creditDoAction` — **production only**, stage does not expose it |
+| [查詢信用卡發卡行](https://developers.ecpay.com.tw/49623)    | `/1.0.0/Cashier/QueryCardInfo`          | ❌                                                                  |
+| [查詢信用卡單筆明細](https://developers.ecpay.com.tw/45925)  | `/1.0.0/CreditDetail/QueryTrade`        | ❌                                                                  |
+| [定期定額查詢 / 作業](https://developers.ecpay.com.tw/46100) | `QueryTrade` / `CreditCardPeriodAction` | ❌ (create accepts the period fields; management does not)          |
+| [下載撥款對帳檔](https://developers.ecpay.com.tw/45931)      | `/1.0.0/Cashier/QueryTradeMedia`        | ❌ (the 幕後取號 provider has the equivalent)                       |
+
+Stage-verified 2026-08-01 against **both** published test merchants, since they take
+different paths: `2000132` (3D off) authorizes directly, `3002607` (3D on) returns a
+`ThreeDURL`. Deviations found, documented in `backauth-fixtures.ts`:
+
+- the 3D response has **no `RtnCode`/`RtnMsg`** at all, so a RtnCode-first check
+  rejects a valid hand-off
+- `MerchantID` is a number on the 3D branch, a string on the authorized branch
+- `OrderResultURL` is required in practice (`5000029` without it), undocumented as such
+- a declined card returns `10100058`, which means something entirely different in the
+  幕後取號 table — error tables must stay per-service
+- `IssuingBank` is English on stage; `ChargeFee` fractional; `ProcessFee` present
+
+Not implemented: `QueryCardInfo`, `CreditDetail/QueryTrade`, 定期定額 management,
+and the BackAuth-side `QueryTradeMedia`.
 
 ---
 
@@ -240,8 +271,9 @@ Capabilities to add later:
 
 ---
 
-**Conclusion:** three paths are stage-tested — AIO core (create redirect + query +
+**Conclusion:** four paths are stage-tested — AIO core (create redirect + query +
 credit refund R + MAC), ECPG core (GetToken + CreatePayment + notify), and
-非信用卡幕後取號 (取號 + both queries + notify). Coverage is still **not** complete
-against ECPay's full surface: 信用卡幕後授權, most ECPG card-on-file/period APIs,
-reconcile downloads, and many AIO payment methods/params remain missing.
+非信用卡幕後取號 (all 6 endpoints), and 信用卡幕後授權 (authorize + query + notify;
+請退款 is production-only by ECPay's design). Coverage is still **not** complete against
+ECPay's full surface: most ECPG card-on-file/period APIs, 定期定額 management,
+`QueryCardInfo`, and many AIO payment methods/params remain missing.
