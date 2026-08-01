@@ -1,5 +1,104 @@
 # @paid-tw/payment-ecpay
 
+## 0.3.0
+
+### Minor Changes
+
+- cd1d403: Make the whole AIO parameter surface reachable, and add the AIO 取號結果通知.
+
+  `createPayment` previously sent a fixed set of 11 fields with no way to pass anything
+  else, so most of AIO was simply unreachable. It now accepts:
+
+  - the **13 typed common optional fields** (`storeId`, `clientBackUrl`, `itemUrl`,
+    `remark`, `chooseSubPayment`, `orderResultUrl`, `ignorePayment`, `platformId`,
+    `customField1`-`4`, `language`)
+  - `paymentInfoUrl` / `clientRedirectUrl` for the take-number notify
+  - a **`params` escape hatch** for method-specific fields (`ExpireDate`,
+    `StoreExpireDate`, `Desc_1..4`, `CreditInstallment`, `Period*`, …), merged **before**
+    the CheckMacValue is computed so passed-through fields are actually signed
+
+  **Breaking, despite being a `minor` on 0.x:** `params` rejects three groups of names
+  rather than merging them, each throwing `VALIDATION`.
+
+  - **Derived or signed by the adapter** — `MerchantID`, `MerchantTradeNo`,
+    `MerchantTradeDate`, `PaymentType`, `TotalAmount`, `ReturnURL`, `ChoosePayment`,
+    `EncryptType`, `CheckMacValue`. Two sources of truth for a signed value is how you get
+    a MAC that does not match what you meant to send.
+  - **Already covered by a typed option** — `StoreID`, `ClientBackURL`, `ItemURL`, `Remark`,
+    `ChooseSubPayment`, `OrderResultURL`, `IgnorePayment`, `PlatformID`,
+    `CustomField1`-`4`, `Language`, `PaymentInfoURL`, `ClientRedirectURL`. Use the named
+    option (`storeId`, `remark`, …). If you passed one of these through `params` against a
+    pre-release build, the `params` value silently took precedence over the typed option;
+    it now throws instead.
+  - **Object-internal names, and any name that is not a valid field name** — `__proto__`,
+    `constructor`, `prototype`, plus anything that does not match
+    `/^[A-Za-z][A-Za-z0-9_]*$/`. Note the leading character must be a **letter**, so
+    `_Foo` throws as well as `9foo` and `has-dash`. ECPay has no fields by any of those
+    names, and `constructor`/`prototype` were previously signed and sent.
+
+  New `verifyEcpayPaymentInfoNotify` for the 取號結果通知 that `PaymentInfoURL` and
+  `ClientRedirectURL` deliver.
+
+  ⚠️ **Use it instead of `verifyPaymentNotify` for that notify.** 取號成功 is `RtnCode 2`
+  for ATM and `10100073` for CVS/BARCODE — not `1` — so the payment-result verifier
+  reports a perfectly successful 取號 as `success: false`. Same transport, different
+  success codes and field set.
+
+- 771a255: Add the ECPay credit queries, exported from the package root:
+
+  - `queryEcpayCreditDetail` — 查詢信用卡單筆明細紀錄 (`CreditDetail/QueryTrade`)
+  - `queryEcpayCardInfo` — 查詢信用卡發卡行 (`Credit/QueryCardInfo`), from a **6-9 digit
+    BIN prefix**, never a full card number. ⚠️ 閘道商-only; other merchants get
+    `UNSUPPORTED`.
+
+  Both are also available as `queryCreditDetail` / `queryCardInfo` on the 幕後授權
+  provider, which already targets the same host. They live at the **root** rather than
+  the `/backauth` subpath because neither handles card data.
+
+  ECPay documents these same `ecpayment` endpoints under both 站內付 2.0 and 幕後授權, so
+  one implementation serves both product lines.
+
+  Two behaviours worth knowing, both verified against stage:
+
+  - `CreditDetail/QueryTrade` has **two error protocols**, and success uses neither: a
+    successful response has `RtnMsg: ""` and no `RtnCode`, while a real failure arrives as
+    `RtnCode 10000185` — which the doc does not mention for this endpoint at all.
+  - Zero-padding a short BIN prefix (which the doc instructs) **changes the answer**:
+    digits 7-9 select a co-branded product, so a 6-digit prefix identifies the issuer but
+    loses 聯名卡 detail.
+
+  Adds `ECPAY_SANDBOX_GATEWAY`, ECPay's published 閘道商 stage merchant, needed to exercise
+  查詢發卡行 at all.
+
+- 6716a77: feat(ecpay): 定期定額 (recurring credit) on the 幕後授權 provider
+
+  `@paid-tw/payment-ecpay/backauth` can now run the full recurring-credit lifecycle:
+
+  - `createPayment({ period })` starts a schedule (`D`/`M`/`Y`, with the ranges validated
+    before the request goes out)
+  - `queryPeriodOrder()` reads its progress, including the per-cycle history
+  - `creditCardPeriodAction()` does `ReAuth` / `Cancel`
+
+  There is no dedicated create endpoint at ECPay — a schedule is an ordinary `BackAuth`
+  call carrying four extra `CardInfo` fields — so this adds no new provider and no new
+  config.
+
+  Two fields ECPay returns but does not document are surfaced, both verified against
+  stage:
+
+  - `executions` (`ExecLog`) — the only per-cycle history. Counters report _how many_
+    cycles succeeded; this reports which, when, for how much, and under which `TradeNo`
+    (each cycle gets its own), which is what reconciliation needs.
+  - `isActive` / `execStatus` (`ExecStatus`) — whether the schedule is still running.
+    `status`/`TradeStatus` cannot answer this: it stays `"paid"` on a cancelled schedule
+    because the first cycle really was charged.
+
+  Also fixes `EcpayBackAuthAuthorizedResult.period`, which was declared but never
+  populated, so the schedule ECPay echoes on the create response was always dropped.
+
+  Note for anyone testing this: **the first cycle is charged at create time**, so
+  `execTimes: 2` means "now plus one more", not "two future charges".
+
 ## 0.2.0
 
 ### Minor Changes
