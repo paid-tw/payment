@@ -9,3 +9,6 @@ coverage
 
 # Captured ECPay ReturnURL notifies (scripts/ecpay-notify-capture.mjs)
 *.jsonl
+
+# `pnpm pack` output — docs/release.md tells you to run it, so it will appear here.
+*.tgz
