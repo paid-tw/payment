@@ -218,8 +218,11 @@ export function parseTradeMediaCsv(csv: string): Record<string, string>[] {
 /** Strip ECPay's `="value"` Excel armour, leaving a plain cell value. */
 function unarmour(cell: string): string {
   const trimmed = cell.trim();
+  // `noUncheckedIndexedAccess` makes a capture group `string | undefined`, and it
+  // genuinely can be for a zero-length cell (`=""`), so default rather than assert.
   const armoured = /^="(.*)"$/.exec(trimmed);
-  return armoured ? armoured[1] : trimmed.replace(/^"(.*)"$/, "$1");
+  if (armoured) return armoured[1] ?? "";
+  return trimmed.replace(/^"(.*)"$/, "$1");
 }
 
 export interface EcpayPayCodeProvider extends PaymentProvider {

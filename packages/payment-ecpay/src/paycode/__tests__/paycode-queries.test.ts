@@ -329,6 +329,12 @@ describe("parseTradeMediaCsv", () => {
     expect(parseTradeMediaCsv(TRADE_MEDIA_EMPTY_CSV)).toEqual([]);
   });
 
+  it("handles an empty armoured cell", () => {
+    // `=""` is what an empty column looks like once armoured; the capture group is
+    // legitimately empty there, which is why unarmour defaults instead of asserting.
+    expect(parseTradeMediaCsv('="a",="b"\r\n="",="x"\r\n')).toEqual([{ a: "", b: "x" }]);
+  });
+
   it("tolerates plain unarmoured cells and a missing trailing cell", () => {
     const csv = "a,b,c\r\n1,2\r\n";
     expect(parseTradeMediaCsv(csv)).toEqual([{ a: "1", b: "2", c: "" }]);
