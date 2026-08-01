@@ -633,6 +633,13 @@ export function createEcpayBackAuthProvider(
     },
 
     async creditCardPeriodAction(input: EcpayPeriodActionInput): Promise<EcpayPeriodActionResult> {
+      // CREATE_PAYMENT, not GET_PAYMENT, even though this operates on an existing
+      // schedule. `ReAuth` retries the latest failed cycle, i.e. it authorizes money;
+      // `Cancel` mutates the schedule. Neither is a read, and the capability set has
+      // only CREATE/GET/REFUND — so guarding this with the read capability would say
+      // "a read-only provider may trigger a charge", which is the dangerous direction
+      // to be wrong in. Both are always present together today, so the choice is about
+      // what the guard *claims*, not about behaviour.
       assertSupports(PROVIDER, capabilities, "CREATE_PAYMENT");
       const { merchantId } = requireCredentials(config);
       if (input.action !== "ReAuth" && input.action !== "Cancel") {
