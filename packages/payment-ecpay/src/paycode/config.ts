@@ -22,6 +22,10 @@ export const ECPAY_PAYCODE_PATHS = {
   queryTrade: "/1.0.0/Cashier/QueryTrade",
   /** 查詢 ATM/CVS/BARCODE 取號結果 — re-read the code we got at 取號 time. */
   queryPaymentInfo: "/1.0.0/Cashier/QueryPaymentInfo",
+  /** 超商代碼轉三段式條碼 — turn a CVS 繳費代碼 into scannable barcode segments. */
+  queryCvsBarcode: "/1.0.0/Cashier/QueryCVSBarcode",
+  /** 下載撥款對帳檔 — **answers CSV, not the AES envelope**. */
+  queryTradeMedia: "/1.0.0/Cashier/QueryTradeMedia",
 } as const;
 
 export interface EcpayPayCodeProviderConfig extends ProviderRuntimeConfig {
