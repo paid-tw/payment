@@ -10,6 +10,70 @@ export interface EcpgEnvelopeResponse {
   Data?: string;
 }
 
+/** Options every AES-JSON call shares. */
+interface EcpgRequestOptions {
+  url: string;
+  merchantId: string;
+  hashKey: string;
+  hashIv: string;
+  data: Record<string, unknown>;
+  label: string;
+  /** Provider tag + message prefix for errors. Defaults to the ECPG adapter. */
+  provider?: string;
+  messagePrefix?: string;
+}
+
+/** Error attribution, defaulted once so both entry points agree. */
+function resolveTags(options: EcpgRequestOptions): { provider: string; prefix: string } {
+  return {
+    provider: options.provider ?? "ecpay-ecpg",
+    prefix: options.messagePrefix ?? "ECPay ECPG",
+  };
+}
+
+/** The outer three-field envelope: `MerchantID` + `RqHeader.Timestamp` + AES `Data`. */
+function buildEcpgBody(options: EcpgRequestOptions): Record<string, unknown> {
+  return {
+    MerchantID: options.merchantId,
+    RqHeader: { Timestamp: Math.floor(Date.now() / 1000) },
+    Data: encryptData(options.data, options.hashKey, options.hashIv),
+  };
+}
+
+/**
+ * POST the envelope and hand back the raw {@link Response}, with transport and
+ * HTTP-status failures already normalized.
+ *
+ * Sole owner of the request side for every AES-JSON call, so a future change to
+ * headers, timeouts or retries lands in one place — response *decoding* is what
+ * differs between callers, not the request.
+ */
+async function doEcpgFetch(options: EcpgRequestOptions): Promise<Response> {
+  const { provider, prefix } = resolveTags(options);
+  const { url, label } = options;
+
+  let response: Response;
+  try {
+    response = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(buildEcpgBody(options)),
+    });
+  } catch (err) {
+    throw new PaymentError("NETWORK", `${prefix} ${label} 連線失敗`, provider, { cause: err });
+  }
+
+  if (!response.ok) {
+    throw new PaymentError(
+      "PROVIDER",
+      `${prefix} ${label} failed: ${response.status} ${response.statusText}`,
+      provider,
+      { rawCode: String(response.status) },
+    );
+  }
+  return response;
+}
+
 /**
  * POST JSON envelope to an ECPay AES-JSON endpoint: encrypt `data` as `Data`,
  * verify the outer TransCode, decrypt the business payload. Mirrors PHP
@@ -21,48 +85,13 @@ export interface EcpgEnvelopeResponse {
  * AES-JSON services). Callers still have to check the inner `RtnCode`
  * themselves: TransCode only reports transport/crypto success.
  */
-export async function ecpgPost<T extends Record<string, unknown>>(options: {
-  url: string;
-  merchantId: string;
-  hashKey: string;
-  hashIv: string;
-  data: Record<string, unknown>;
-  label: string;
-  /** Provider tag + message prefix for errors. Defaults to the ECPG adapter. */
-  provider?: string;
-  messagePrefix?: string;
-}): Promise<T> {
-  const { url, merchantId, hashKey, hashIv, data, label } = options;
-  const provider = options.provider ?? "ecpay-ecpg";
-  const prefix = options.messagePrefix ?? "ECPay ECPG";
-  const body = {
-    MerchantID: merchantId,
-    RqHeader: { Timestamp: Math.floor(Date.now() / 1000) },
-    Data: encryptData(data, hashKey, hashIv),
-  };
+export async function ecpgPost<T extends Record<string, unknown>>(
+  options: EcpgRequestOptions,
+): Promise<T> {
+  const { hashKey, hashIv, label } = options;
+  const { provider, prefix } = resolveTags(options);
 
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-  } catch (err) {
-    throw new PaymentError("NETWORK", `${prefix} ${label} 連線失敗`, provider, {
-      cause: err,
-    });
-  }
-
-  if (!response.ok) {
-    throw new PaymentError(
-      "PROVIDER",
-      `${prefix} ${label} failed: ${response.status} ${response.statusText}`,
-      provider,
-      { rawCode: String(response.status) },
-    );
-  }
-
+  const response = await doEcpgFetch(options);
   const envelope = (await response.json()) as EcpgEnvelopeResponse;
   if (process.env.PAID_DEBUG === "1") {
     console.error(`[${provider}] ${label} TransCode:`, envelope.TransCode, envelope.TransMsg);
@@ -116,45 +145,13 @@ export async function ecpgPost<T extends Record<string, unknown>>(options: {
  *
  * @see https://developers.ecpay.com.tw/41186
  */
-export async function ecpgPostForText(options: {
-  url: string;
-  merchantId: string;
-  hashKey: string;
-  hashIv: string;
-  data: Record<string, unknown>;
-  label: string;
-  provider?: string;
-  messagePrefix?: string;
-}): Promise<{ text: string; contentType: string | null }> {
-  const { url, merchantId, hashKey, hashIv, data, label } = options;
-  const provider = options.provider ?? "ecpay-ecpg";
-  const prefix = options.messagePrefix ?? "ECPay ECPG";
-  const body = {
-    MerchantID: merchantId,
-    RqHeader: { Timestamp: Math.floor(Date.now() / 1000) },
-    Data: encryptData(data, hashKey, hashIv),
-  };
+export async function ecpgPostForText(
+  options: EcpgRequestOptions,
+): Promise<{ text: string; contentType: string | null }> {
+  const { hashKey, hashIv, label } = options;
+  const { provider, prefix } = resolveTags(options);
 
-  let response: Response;
-  try {
-    response = await fetch(url, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(body),
-    });
-  } catch (err) {
-    throw new PaymentError("NETWORK", `${prefix} ${label} 連線失敗`, provider, { cause: err });
-  }
-
-  if (!response.ok) {
-    throw new PaymentError(
-      "PROVIDER",
-      `${prefix} ${label} failed: ${response.status} ${response.statusText}`,
-      provider,
-      { rawCode: String(response.status) },
-    );
-  }
-
+  const response = await doEcpgFetch(options);
   const text = await response.text();
   if (process.env.PAID_DEBUG === "1") {
     console.error(`[${provider}] ${label} ${text.length}B:`, text.slice(0, 500));
