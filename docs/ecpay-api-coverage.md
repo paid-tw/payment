@@ -266,7 +266,16 @@ Capabilities to add later:
 
 1. ~~**`verifyPaymentNotify`**~~ — done (`notify.ts`, PHP + doc goldens).
 2. ~~create result `mode: "redirect"`~~ — done on `EcpayCheckoutForm`.
-3. Expand `ChoosePayment` mapping: BARCODE, WebATM, ApplePay, TWQR, BNPL (and optional `IgnorePayment` when ALL). → still open (P0.5 / with method enum)
+3. ~~Expand `ChoosePayment` mapping~~ / reach the rest of the AIO surface — done a
+   different way: `createPayment` now takes the 13 typed common optional fields plus a
+   `params` escape hatch signed into the CheckMacValue, so **every** AIO field is
+   reachable without enumerating methods. `BARCODE` is mapped; ApplePay / TWQR / BNPL /
+   WeiXin need `ChoosePayment` via `params` **and** merchant activation, and none can be
+   stage-verified (device, certificate, or third-party onboarding) — see below.
+4. ~~`PaymentInfoURL` / `ClientRedirectURL` + 取號結果通知~~ — done
+   (`verifyEcpayPaymentInfoNotify`). ⚠️ 取號成功 is `RtnCode 2` (ATM) / `10100073`
+   (CVS/BARCODE), so the payment-result verifier reports a successful 取號 as a failure —
+   which is why it is a separate function.
 
 ### P1 — AIO credit lifecycle
 
@@ -307,6 +316,16 @@ Capabilities to add later:
   chain-specific; the 對帳檔 is Excel-armoured CSV with a 13th undocumented column.
 - A truly-paid notify (`TradeStatus: "1"` + 繳費門市) still needs a real
   convenience-store payment; that one fixture stays doc-derived.
+
+---
+
+### Deliberately parked — not stage-verifiable
+
+ApplePay, TWQR, BNPL and WeiXin are reachable through `params: { ChoosePayment: … }`, but
+each needs merchant activation and none can be verified on stage: ApplePay needs a device
+plus a merchant certificate, BNPL needs 裕富/中租 onboarding, WeiXin is cross-border, and
+TWQR needs 歐付寶 activation. Shipping typed wrappers for them would mean doc-derived
+fixtures only, which this package's other adapters have avoided.
 
 ---
 

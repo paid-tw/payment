@@ -88,6 +88,80 @@ export interface EcpayCreditTradeDetail {
  *
  * `mode: "redirect"` is explicit so callers never treat this as "payment succeeded".
  */
+/**
+ * The AIO optional fields worth typing — the 13 "共同參數" every payment method accepts
+ * beyond the required ones.
+ *
+ * Method-specific fields (ATM `ExpireDate`, CVS `StoreExpireDate`/`Desc_1..4`, credit
+ * `CreditInstallment`/`Redeem`/`Period*`, BNPL, TWQR …) live on {@link
+ * EcpayAioFields.params} instead: there are dozens, they change per method, and
+ * enumerating them here would mean a release every time ECPay adds one.
+ */
+export interface EcpayAioCommonFields {
+  /** 特店旗下店舖代號. */
+  storeId?: string;
+  /** Button link back to the merchant from ECPay's page. */
+  clientBackUrl?: string;
+  /** 商品銷售網址. */
+  itemUrl?: string;
+  remark?: string;
+  /** 付款子項目 — pins a sub-method and skips ECPay's chooser. */
+  chooseSubPayment?: string;
+  /** Client-side result redirect. Distinct from `clientBackUrl`. */
+  orderResultUrl?: string;
+  /** Hide payment methods on the chooser, e.g. `"Credit#WebATM"`. */
+  ignorePayment?: string;
+  platformId?: string;
+  customField1?: string;
+  customField2?: string;
+  customField3?: string;
+  customField4?: string;
+  /** `ENG` / `KOR` / `JPN` / `CHI`; omit for 繁中. */
+  language?: string;
+}
+
+/**
+ * Take-number notify hooks for ATM / CVS / BARCODE.
+ *
+ * Both fire when the **order is created**, not when it is paid, and carry the payment
+ * code (bank + virtual account, or 繳費代碼, or barcode segments).
+ *
+ * ⚠️ Verify that notify with {@link import("./notify.js").verifyEcpayPaymentInfoNotify},
+ * **not** `verifyPaymentNotify`: 取號成功 is `RtnCode 2` for ATM and `10100073` for
+ * CVS/BARCODE, so the payment-result verifier would report a successful 取號 as a
+ * failure.
+ */
+export interface EcpayTakeNumberHooks {
+  /** Server-side POST with the payment code. */
+  paymentInfoUrl?: string;
+  /** Browser redirect carrying the same information. */
+  clientRedirectUrl?: string;
+}
+
+export interface EcpayAioFields extends EcpayAioCommonFields, EcpayTakeNumberHooks {
+  /**
+   * Escape hatch for any other AIO field, merged verbatim into the form before the
+   * CheckMacValue is computed — so method-specific parameters work without this
+   * adapter having to know about them.
+   *
+   * Values are stringified; `undefined` entries are dropped. Fields this adapter
+   * derives or signs (`MerchantID`, `MerchantTradeNo`, `TotalAmount`, `ReturnURL`,
+   * `PaymentType`, `EncryptType`, `ChoosePayment`, `CheckMacValue`) are **rejected**
+   * rather than silently overridden — two sources of truth for a signed field is how
+   * you get a MAC that does not match what you meant to send.
+   *
+   * @example
+   * // ATM: 7-day deadline plus the take-number notify
+   * { params: { ExpireDate: 7 } , paymentInfoUrl: "https://shop/paid-info" }
+   * @example
+   * // 3-instalment credit
+   * { params: { CreditInstallment: "3" } }
+   */
+  params?: Record<string, string | number | undefined>;
+}
+
+export type EcpayCreatePaymentInput = CreatePaymentRequest & EcpayAioFields;
+
 export interface EcpayCheckoutForm {
   mode: "redirect";
   action: string;
@@ -101,7 +175,7 @@ export interface EcpayCheckoutForm {
  * returns), so the factory registry accepts it unchanged.
  */
 export interface EcpayProvider extends PaymentProvider {
-  createPayment(input: CreatePaymentRequest): Promise<EcpayCheckoutForm>;
+  createPayment(input: EcpayCreatePaymentInput): Promise<EcpayCheckoutForm>;
   refundPayment(input: RefundPaymentRequest): Promise<EcpayRefundResult>;
   /**
    * Verify a ReturnURL / OrderResultURL payment-result POST (CheckMacValue).
@@ -165,7 +239,7 @@ export function createEcpayProvider(config: EcpayProviderConfig): EcpayProvider 
     name: "ecpay",
     capabilities: CAPABILITIES,
 
-    async createPayment(input: CreatePaymentRequest): Promise<EcpayCheckoutForm> {
+    async createPayment(input: EcpayCreatePaymentInput): Promise<EcpayCheckoutForm> {
       assertSupports("ecpay", CAPABILITIES, "CREATE_PAYMENT");
       const { merchantId, hashKey, hashIv } = requireCredentials(config);
       if (input.currency && input.currency !== "TWD") {
@@ -206,6 +280,30 @@ export function createEcpayProvider(config: EcpayProviderConfig): EcpayProvider 
         params.OrderResultURL = input.returnUrl;
         params.ClientBackURL = input.returnUrl;
       }
+
+      // Typed optional fields override the returnUrl shorthand above when both are
+      // given — the explicit field is the more specific intent.
+      assign(params, {
+        StoreID: input.storeId,
+        ClientBackURL: input.clientBackUrl,
+        ItemURL: input.itemUrl,
+        Remark: input.remark,
+        ChooseSubPayment: input.chooseSubPayment,
+        OrderResultURL: input.orderResultUrl,
+        IgnorePayment: input.ignorePayment,
+        PlatformID: input.platformId,
+        CustomField1: input.customField1,
+        CustomField2: input.customField2,
+        CustomField3: input.customField3,
+        CustomField4: input.customField4,
+        Language: input.language,
+        PaymentInfoURL: input.paymentInfoUrl,
+        ClientRedirectURL: input.clientRedirectUrl,
+      });
+      assign(params, sanitizeExtraParams(input.params));
+
+      // Signed last, over the final set — including everything passed through, or the
+      // MAC would not cover it and ECPay would reject the order.
       params.CheckMacValue = computeCheckMacValue(params, hashKey, hashIv);
 
       return {
@@ -495,6 +593,58 @@ export function computeCheckMacValue(
   const raw = `HashKey=${hashKey}&${sorted}&HashIV=${hashIv}`;
   const encoded = dotNetUrlEncode(raw);
   return crypto.createHash("sha256").update(encoded).digest("hex").toUpperCase();
+}
+
+/** Copy defined values only, so an omitted option never becomes an empty form field. */
+function assign(target: Record<string, string>, source: Record<string, string | undefined>): void {
+  for (const [key, value] of Object.entries(source)) {
+    if (value !== undefined) target[key] = value;
+  }
+}
+
+/**
+ * Fields this adapter derives or signs. Letting a passthrough entry win over these
+ * would create two sources of truth for a value that goes into the CheckMacValue —
+ * the resulting order is rejected by ECPay and the cause is invisible from the code.
+ */
+const RESERVED_AIO_PARAMS: ReadonlySet<string> = new Set([
+  "MerchantID",
+  "MerchantTradeNo",
+  "MerchantTradeDate",
+  "PaymentType",
+  "TotalAmount",
+  "ReturnURL",
+  "ChoosePayment",
+  "EncryptType",
+  "CheckMacValue",
+]);
+
+/** Stringify passthrough values, drop `undefined`, and refuse the reserved names. */
+function sanitizeExtraParams(
+  extra: Record<string, string | number | undefined> | undefined,
+): Record<string, string | undefined> {
+  if (!extra) return {};
+  const out: Record<string, string | undefined> = {};
+  for (const [key, value] of Object.entries(extra)) {
+    if (value === undefined) continue;
+    if (RESERVED_AIO_PARAMS.has(key)) {
+      throw new PaymentError(
+        "VALIDATION",
+        `ECPay params.${key} 由 adapter 產生或簽章，不可覆寫` +
+          (key === "CheckMacValue" ? "" : `（請改用對應的具名參數或 method）`),
+        "ecpay",
+      );
+    }
+    if (typeof value === "number" && !Number.isFinite(value)) {
+      throw new PaymentError(
+        "VALIDATION",
+        `ECPay params.${key} 不是有效數值（收到 ${String(value)}）`,
+        "ecpay",
+      );
+    }
+    out[key] = String(value);
+  }
+  return out;
 }
 
 /** ECPay's ChoosePayment for a generic method; anything else offers all methods. */

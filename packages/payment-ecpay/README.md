@@ -81,6 +81,66 @@ ECPAY_LIVE=1 ECPAY_QUERY_ID=yourMerTradeNo PAID_DEBUG=1 pnpm test:live:ecpay
 
 MSW 的 default handlers 會對已知 `MerchantTradeNo` 重放 field-exact fixtures（與 live 同一組 HashKey/HashIV），方便在無網路時重現 stage 行為。
 
+### AIO 其他參數（passthrough）
+
+`createPayment` 除了必填欄位外，把 AIO 的 13 個共同選填參數做成具名欄位，其餘（各付款
+方式自己的參數）走 `params` 逃生口：
+
+```ts
+const form = await ecpay.createPayment({
+  amount: 321,
+  currency: "TWD",
+  method: "atm",
+  orderId: "ORDER123",
+  notifyUrl: "https://shop/notify",
+  // 具名的共同參數
+  storeId: "S1",
+  remark: "備註",
+  language: "ENG",
+  customField1: "c1",
+  ignorePayment: "Credit#WebATM",
+  // 取號通知（見下節）
+  paymentInfoUrl: "https://shop/paid-info",
+  // 各付款方式自己的參數走這裡
+  params: { ExpireDate: 7 }, // ATM 繳費期限
+  // params: { CreditInstallment: "3" }  // 信用卡分期
+  // params: { StoreExpireDate: 10080, Desc_1: "..." }  // 超商代碼
+});
+```
+
+為什麼不是把每個付款方式都做成具名參數：各方式的參數有數十個、還會增加，逐個列舉等於
+綠界每加一個欄位這個套件就要發一版。`params` 讓所有 AIO 欄位立刻可用。
+
+⚠️ **`CheckMacValue` 是在合併 `params` 之後才計算的** —— 沒被簽進去的欄位綠界會擋，而且
+看不出原因。另外 adapter 自己產生或簽章的欄位（`MerchantID`、`MerchantTradeNo`、
+`TotalAmount`、`ReturnURL`、`PaymentType`、`EncryptType`、`ChoosePayment`、
+`MerchantTradeDate`、`CheckMacValue`）**不允許用 `params` 覆寫**，會直接丟
+`VALIDATION` —— 一個要簽章的欄位有兩個來源，就是 MAC 對不上的原因。
+
+### AIO 取號結果通知（`PaymentInfoURL`）
+
+這是 AIO 版的「拿到繳費資訊」—— 消費者還是走綠界頁面，但**訂單建立時**（不是付款完成
+時）綠界就會把虛擬帳號／繳費代碼／條碼 server-post 給你：
+
+```ts
+import { verifyEcpayPaymentInfoNotify, ECPAY_NOTIFY_ACK } from "@paid-tw/payment-ecpay";
+
+app.post("/ecpay/paid-info", (req, res) => {
+  const info = verifyEcpayPaymentInfoNotify(req.body, { hashKey, hashIv, merchantId });
+  if (info.success) {
+    // info.atm?.vAccount / info.cvs?.paymentNo / info.barcode?.barcode1..3
+  }
+  res.type("text/plain").send(ECPAY_NOTIFY_ACK); // "1|OK"
+});
+```
+
+⚠️ **一定要用 `verifyEcpayPaymentInfoNotify`，不要用 `verifyPaymentNotify`。** 取號成功的
+`RtnCode` 是 **`2`（ATM）／`10100073`（CVS/BARCODE）**，不是 `1` —— 拿付款結果的驗證器去
+驗取號通知，成功的取號會被判成 `success: false`。兩者傳輸方式（form + CheckMacValue）
+相同，但成功碼和欄位集都不同。
+
+想完全不讓消費者看到綠界頁面的話，用[非信用卡幕後取號](#非信用卡幕後取號背景取號)那條。
+
 ## 四套 API 與區隔方式
 
 綠界金流有四條產品線，**同一 npm 套件、四個 factory、四個 `name`**（詳見

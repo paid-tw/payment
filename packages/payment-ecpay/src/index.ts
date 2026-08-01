@@ -2,6 +2,10 @@
 export { createEcpayProvider, computeCheckMacValue } from "./provider.js";
 export type {
   EcpayProvider,
+  EcpayAioCommonFields,
+  EcpayAioFields,
+  EcpayCreatePaymentInput,
+  EcpayTakeNumberHooks,
   EcpayCheckoutForm,
   EcpayRefundResult,
   EcpayCreditAction,
@@ -18,11 +22,17 @@ export {
   resolveEcpayOrigin,
 } from "./config.js";
 export type { EcpayProviderConfig } from "./config.js";
-export { ECPAY_NOTIFY_ACK, coerceNotifyBody, verifyPaymentNotify } from "./notify.js";
+export {
+  ECPAY_NOTIFY_ACK,
+  coerceNotifyBody,
+  verifyEcpayPaymentInfoNotify,
+  verifyPaymentNotify,
+} from "./notify.js";
 export type {
   EcpayNotifyBody,
   EcpayNotifyCredentials,
   EcpayNotifyInput,
+  EcpayPaymentInfoNotify,
   EcpayPaymentNotify,
 } from "./notify.js";
 
