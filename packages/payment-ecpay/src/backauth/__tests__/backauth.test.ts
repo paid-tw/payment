@@ -4,7 +4,11 @@ import { PaymentError as PaymentErrorClass, supports } from "@paid-tw/payment";
 import type { PaymentError } from "@paid-tw/payment";
 import { ECPAY_BACKAUTH_ORIGINS, ECPAY_TEST_CARD, resolveBackAuthOrigin } from "../config.js";
 import { createEcpayBackAuthProvider } from "../provider.js";
-import type { EcpayBackAuthCreateInput, EcpayCardDetails } from "../provider.js";
+import type {
+  EcpayBackAuthCreateInput,
+  EcpayBackAuthRefundInput,
+  EcpayCardDetails,
+} from "../provider.js";
 import {
   AUTH_3DS,
   AUTH_DECLINED,
@@ -635,11 +639,22 @@ describe("Credit/DoAction — production only", () => {
   it("refundPayment needs the gateway TradeNo, and says so", async () => {
     // Unlike the AIO adapter this one will not silently pre-query for the TradeNo;
     // an extra lookup on a refund path is worth being explicit about.
+    //
+    // Both fields are required by `EcpayBackAuthRefundInput`, so these calls are TYPE
+    // errors for a typed consumer — the casts are deliberate, exercising the runtime
+    // guard that must still exist because a caller holding the widened
+    // `PaymentProvider` type can reach this method without the narrowing.
     await expect(
-      testProvider().refundPayment({ orderId: "BAOK85547852370", amount: 199 }),
+      testProvider().refundPayment({
+        orderId: "BAOK85547852370",
+        amount: 199,
+      } as EcpayBackAuthRefundInput),
     ).rejects.toMatchObject({ code: "VALIDATION", message: /tradeNo/ });
     await expect(
-      testProvider().refundPayment({ orderId: "BAOK85547852370", tradeNo: "1" }),
+      testProvider().refundPayment({
+        orderId: "BAOK85547852370",
+        tradeNo: "1",
+      } as EcpayBackAuthRefundInput),
     ).rejects.toMatchObject({ code: "VALIDATION", message: /amount/ });
   });
 

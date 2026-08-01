@@ -87,6 +87,7 @@ export type {
   EcpayBackAuthDoActionResult,
   EcpayBackAuthFields,
   EcpayBackAuthProvider,
+  EcpayBackAuthRefundInput,
   EcpayBackAuthResult,
   EcpayCardDetails,
 } from "./backauth/provider.js";

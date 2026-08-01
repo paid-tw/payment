@@ -185,6 +185,16 @@ export interface EcpayBackAuthDoActionInput {
   amount: number;
 }
 
+/**
+ * Refund input. Narrower than {@link RefundPaymentRequest} on purpose — both fields
+ * are mandatory here.
+ */
+export interface EcpayBackAuthRefundInput extends RefundPaymentRequest {
+  /** 綠界交易編號, from `result.tradeNo` or the notify's `tradeNo`. Not `gwsr`. */
+  tradeNo: string;
+  amount: number;
+}
+
 export interface EcpayBackAuthDoActionResult {
   action: EcpayBackAuthAction;
   rtnCode: number;
@@ -213,8 +223,16 @@ export interface EcpayBackAuthProvider extends PaymentProvider {
    * provider throws `UNSUPPORTED` instead of issuing a doomed request.
    */
   creditDoAction(input: EcpayBackAuthDoActionInput): Promise<EcpayBackAuthDoActionResult>;
-  /** Convenience wrapper for `creditDoAction` with `action: "R"`. Production only. */
-  refundPayment(input: RefundPaymentRequest & { tradeNo?: string }): Promise<unknown>;
+  /**
+   * Convenience wrapper for `creditDoAction` with `action: "R"`. Production only.
+   *
+   * `tradeNo` and `amount` are **required**, unlike the base
+   * {@link RefundPaymentRequest}: this API refunds by 綠界交易編號 and will not look it
+   * up for you. Typed consumers therefore get a compile error rather than a runtime
+   * VALIDATION. The runtime checks stay, because a caller holding the widened
+   * `PaymentProvider` type can still reach this method without the narrowing.
+   */
+  refundPayment(input: EcpayBackAuthRefundInput): Promise<EcpayBackAuthDoActionResult>;
   /** Verify a ReturnURL notify; respond with the ACK string. */
   verifyPaymentNotify(
     input: EcpayBackAuthNotifyEnvelope | string | Record<string, unknown>,
@@ -405,7 +423,7 @@ export function createEcpayBackAuthProvider(
 
     creditDoAction: doAction,
 
-    async refundPayment(input: RefundPaymentRequest & { tradeNo?: string }): Promise<unknown> {
+    async refundPayment(input: EcpayBackAuthRefundInput): Promise<EcpayBackAuthDoActionResult> {
       // Redundant with assertDoActionAvailable below, but keeps the capability guard
       // and the runtime behaviour in agreement for callers that feature-detect.
       assertSupports(PROVIDER, capabilities, "REFUND_PAYMENT");
