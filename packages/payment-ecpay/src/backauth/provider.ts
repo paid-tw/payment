@@ -158,7 +158,14 @@ export interface EcpayBackAuth3DSResult {
   raw: Record<string, unknown>;
 }
 
-/** Authorization completed without 3D; `success` means the card was charged. */
+/**
+ * Authorization completed without 3D.
+ *
+ * `success` means the **authorization** succeeded — not necessarily that funds have
+ * been captured. With `directCapture: false` (the default) the amount is authorized
+ * and only settles at 關帳 (`creditDoAction("C")`), so a successful result is not yet
+ * money in your account. `status` reports ECPay's own view of the order.
+ */
 export interface EcpayBackAuthAuthorizedResult {
   mode: "authorized";
   success: boolean;
