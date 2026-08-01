@@ -115,7 +115,6 @@ export function verifyPaymentNotify(
   };
 }
 
-/** Coerce framework-agnostic body shapes into a flat string map. */
 /**
  * Shared authenticity check for every AIO form notify: CheckMacValue over the whole
  * body, then the identity fields.
@@ -275,6 +274,7 @@ function pick<T extends Record<string, string | undefined>>(fields: T): T {
   return out;
 }
 
+/** Coerce framework-agnostic body shapes into a flat string map. */
 export function coerceNotifyBody(input: EcpayNotifyInput): EcpayNotifyBody {
   if (typeof input === "string") {
     return Object.fromEntries(new URLSearchParams(input).entries());

@@ -82,13 +82,6 @@ export interface EcpayCreditTradeDetail {
 }
 
 /**
- * ECPay's AioCheckOut is a **browser redirect**, not a settled server-side charge.
- * Auto-submit `action` + `params` so the buyer reaches the cashier; wait for
- * ReturnURL notify ({@link EcpayProvider.verifyPaymentNotify}) or query later.
- *
- * `mode: "redirect"` is explicit so callers never treat this as "payment succeeded".
- */
-/**
  * The AIO optional fields worth typing — the 13 "共同參數" every payment method accepts
  * beyond the required ones.
  *
@@ -162,6 +155,13 @@ export interface EcpayAioFields extends EcpayAioCommonFields, EcpayTakeNumberHoo
 
 export type EcpayCreatePaymentInput = CreatePaymentRequest & EcpayAioFields;
 
+/**
+ * ECPay's AioCheckOut is a **browser redirect**, not a settled server-side charge.
+ * Auto-submit `action` + `params` so the buyer reaches the cashier; wait for
+ * ReturnURL notify ({@link EcpayProvider.verifyPaymentNotify}) or query later.
+ *
+ * `mode: "redirect"` is explicit so callers never treat this as "payment succeeded".
+ */
 export interface EcpayCheckoutForm {
   mode: "redirect";
   action: string;
