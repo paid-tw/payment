@@ -47,10 +47,13 @@ export type {
 } from "./ecpg/notify.js";
 
 // 非信用卡幕後取號 — separate factory / name "ecpay-paycode"
-export { createEcpayPayCodeProvider } from "./paycode/provider.js";
+export { createEcpayPayCodeProvider, parseTradeMediaCsv } from "./paycode/provider.js";
 export type {
   EcpayAtmCode,
   EcpayBarcodeCode,
+  EcpayCvsBarcodeChain,
+  EcpayCvsBarcodeInput,
+  EcpayCvsBarcodeResult,
   EcpayCvsChain,
   EcpayCvsCode,
   EcpayPayCodeCreateInput,
@@ -58,6 +61,8 @@ export type {
   EcpayPayCodeMethod,
   EcpayPayCodeProvider,
   EcpayPayCodeResult,
+  EcpayTradeMediaQuery,
+  EcpayTradeMediaResult,
 } from "./paycode/provider.js";
 export {
   ECPAY_PAYCODE_ORIGINS,

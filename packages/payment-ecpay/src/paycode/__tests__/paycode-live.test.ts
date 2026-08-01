@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { isPaymentError, type PaymentError } from "@paid-tw/payment";
 import { ECPAY_PAYCODE_ORIGINS } from "../config.js";
+import { parseTradeMediaCsv } from "../provider.js";
 import { stageProvider } from "./paycode-server.js";
 
 /**
@@ -165,6 +166,69 @@ describe.skipIf(!live)("ECPay 幕後取號 live — stage merchant 3002607", LIV
       expect(pe.code).not.toBe("AUTH");
       expect(pe.code).not.toBe("NETWORK");
     }
+  });
+
+  it("QueryCVSBarcode converts a fresh 繳費代碼 for every supported chain", async () => {
+    const cvs = await provider.createPayment({
+      amount: 150,
+      currency: "TWD",
+      method: "cvs",
+      orderId: orderId("PCQB"),
+      itemDesc: "paid-tw barcode probe",
+      notifyUrl: "https://example.com/ecpay/paycode/notify",
+    });
+    const paymentNo = cvs.cvs?.paymentNo ?? "";
+    expect(paymentNo).toBeTruthy();
+
+    const seen = new Map<string, string>();
+    for (const chain of ["iBon", "Family", "Hilife"] as const) {
+      const bar = await provider.getCvsBarcode({ paymentNo, chain });
+      dump(`QueryCVSBarcode ${chain}`, bar.raw);
+      expect(bar.barcode1).toBeTruthy();
+      expect(bar.barcode2).toBeTruthy();
+      expect(bar.barcode3).toBeTruthy();
+      expect(bar.expireDate).toBe(cvs.cvs?.expireDate);
+      seen.set(chain, `${bar.barcode1}|${bar.barcode3}`);
+    }
+    // Each chain issues its own segments — reusing one at another chain would fail.
+    expect(new Set(seen.values()).size).toBe(3);
+  });
+
+  it("QueryCVSBarcode rejects the chains the API cannot convert, before any network call", async () => {
+    for (const chain of ["CVS", "OK"] as const) {
+      await expect(
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        provider.getCvsBarcode({ paymentNo: "LLL1", chain: chain as any }),
+      ).rejects.toMatchObject({ code: "VALIDATION" });
+    }
+  });
+
+  it("QueryTradeMedia downloads a real 撥款對帳檔 as armoured CSV", async () => {
+    const result = await provider.downloadTradeMedia({
+      dateType: "1",
+      beginDate: "2026-07-01",
+      endDate: "2026-07-31",
+    });
+    dump("QueryTradeMedia", { contentType: result.contentType, csv: result.csv.slice(0, 400) });
+
+    // Served as text/plain with every cell wrapped `="value"` — the Excel
+    // force-to-text idiom, which is why parseTradeMediaCsv exists.
+    expect(result.contentType).toContain("text/plain");
+    expect(result.csv).toMatch(/^="/);
+    expect(result.csv).toContain("特店交易編號");
+
+    // The stage merchant's 取號 orders are never actually paid, so a settlement
+    // report is legitimately empty — header row, zero data rows.
+    const rows = parseTradeMediaCsv(result.csv);
+    expect(Array.isArray(rows)).toBe(true);
+    for (const row of rows) {
+      expect(JSON.stringify(row)).not.toContain('="');
+    }
+
+    // 13 columns, one more than doc 41186 lists.
+    const header = result.csv.split(/\r?\n/)[0].split(",");
+    expect(header.length).toBeGreaterThanOrEqual(12);
+    expect(result.csv).toContain("金流處理費");
   });
 
   it("refund is refused locally — ECPay has no refund API for these methods", async () => {

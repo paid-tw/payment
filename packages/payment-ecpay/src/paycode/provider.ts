@@ -10,7 +10,7 @@ import {
   type PaymentProvider,
   type RefundPaymentRequest,
 } from "@paid-tw/payment";
-import { ecpgPost } from "../ecpg/client.js";
+import { ecpgPost, ecpgPostForText } from "../ecpg/client.js";
 import { asNumber, str } from "../scalars.js";
 import {
   ECPAY_PAYCODE_PATHS,
@@ -140,6 +140,91 @@ export interface EcpayPayCodeResult {
   raw: Record<string, unknown>;
 }
 
+/**
+ * Chains whose kiosks can render a CVS 繳費代碼 as a scannable barcode.
+ *
+ * Deliberately narrower than {@link EcpayCvsChain}: `CVS` (all chains) and `OK` are
+ * **not** supported by the conversion API, and the odd casing (`iBon`, not `IBON`)
+ * is ECPay's, not a typo.
+ */
+export type EcpayCvsBarcodeChain = "Family" | "Hilife" | "iBon";
+
+/**
+ * Three-segment barcode derived from a 繳費代碼.
+ *
+ * Short-lived: each conversion is valid for **10 minutes**, so fetch it when you are
+ * about to show it, not at 取號 time.
+ */
+export interface EcpayCvsBarcodeResult {
+  paymentNo: string;
+  chain: EcpayCvsBarcodeChain;
+  barcode1?: string;
+  barcode2?: string;
+  barcode3?: string;
+  /** Payment deadline of the underlying order, `yyyy/MM/dd HH:mm:ss`. */
+  expireDate?: string;
+  rtnCode: number;
+  rtnMsg: string;
+  raw: Record<string, unknown>;
+}
+
+/** 撥款對帳檔 query. `1` = 結算日期, `2` = 撥款日期. */
+export interface EcpayTradeMediaQuery {
+  dateType: "1" | "2";
+  /** `yyyy-MM-dd`. The range may not exceed one month. */
+  beginDate: string;
+  /** `yyyy-MM-dd`. */
+  endDate: string;
+  /** Omit for all methods. `03` ATM / `04` 超商代碼 / `05` 超商條碼. */
+  paymentType?: "03" | "04" | "05";
+}
+
+/**
+ * Raw CSV reconciliation report.
+ *
+ * Returned verbatim so a column ECPay adds later cannot be silently dropped — the
+ * real file already has a 13th column (`金流處理費`) that doc 41186's list omits.
+ * Use {@link parseTradeMediaCsv} instead of splitting it yourself: every cell is
+ * Excel-armoured as `="value"`.
+ */
+export interface EcpayTradeMediaResult {
+  /** Verbatim CSV text as ECPay returned it. */
+  csv: string;
+  /** Observed as `text/plain`, not `text/csv`. */
+  contentType: string | null;
+}
+
+/**
+ * Parse a 撥款對帳檔 into rows keyed by ECPay's own column headers.
+ *
+ * Handles the two things that make this file hostile to a naive parser:
+ * every cell arrives Excel-armoured as `="value"` (the spreadsheet idiom for
+ * forcing text so long trade numbers survive), and the column set is not fixed.
+ * Headers are taken from row 1 rather than assumed, so an added column shows up as
+ * a new key instead of shifting every value.
+ *
+ * Returns `[]` for an empty report, which ECPay expresses as a header row alone.
+ */
+export function parseTradeMediaCsv(csv: string): Record<string, string>[] {
+  const rows = csv
+    .split(/\r?\n/)
+    .filter((line) => line.trim() !== "")
+    .map((line) => line.split(",").map(unarmour));
+  const [header, ...body] = rows;
+  if (!header) return [];
+  return body.map((cells) => Object.fromEntries(header.map((name, i) => [name, cells[i] ?? ""])));
+}
+
+/** Strip ECPay's `="value"` Excel armour, leaving a plain cell value. */
+function unarmour(cell: string): string {
+  const trimmed = cell.trim();
+  // `noUncheckedIndexedAccess` makes a capture group `string | undefined`, and it
+  // genuinely can be for a zero-length cell (`=""`), so default rather than assert.
+  const armoured = /^="(.*)"$/.exec(trimmed);
+  if (armoured) return armoured[1] ?? "";
+  return trimmed.replace(/^"(.*)"$/, "$1");
+}
+
 export interface EcpayPayCodeProvider extends PaymentProvider {
   readonly name: "ecpay-paycode";
   /**
@@ -156,10 +241,31 @@ export interface EcpayPayCodeProvider extends PaymentProvider {
    * codes are only returned once, at 取號 time.
    */
   getPaymentCode(input: GetPaymentRequest): Promise<EcpayPayCodeResult>;
+  /**
+   * QueryCVSBarcode — convert a 超商代碼 into three barcode segments the consumer can
+   * have scanned at the counter instead of keying the code in.
+   *
+   * Fails once the order is paid or expired, and the result only lives 10 minutes.
+   */
+  getCvsBarcode(input: EcpayCvsBarcodeInput): Promise<EcpayCvsBarcodeResult>;
+  /**
+   * QueryTradeMedia — download the 撥款對帳檔 as CSV.
+   *
+   * Two operational constraints ECPay enforces server-side: the calling IP must be
+   * allow-listed (廠商後台 → 系統開發管理 → 系統介接設定), and only **one file per
+   * minute** is permitted.
+   */
+  downloadTradeMedia(input: EcpayTradeMediaQuery): Promise<EcpayTradeMediaResult>;
   /** Verify a ReturnURL notify; respond with {@link ECPAY_PAYCODE_NOTIFY_ACK}. */
   verifyPaymentNotify(
     input: EcpayPayCodeNotifyEnvelope | string | Record<string, unknown>,
   ): EcpayPayCodeNotify;
+}
+
+export interface EcpayCvsBarcodeInput {
+  /** The 繳費代碼 from a CVS 取號. */
+  paymentNo: string;
+  chain: EcpayCvsBarcodeChain;
 }
 
 /**
@@ -305,6 +411,72 @@ export function createEcpayPayCodeProvider(
       return normalizePayCode(decoded);
     },
 
+    async getCvsBarcode(input: EcpayCvsBarcodeInput): Promise<EcpayCvsBarcodeResult> {
+      assertSupports(PROVIDER, CAPABILITIES, "GET_PAYMENT");
+      const { merchantId } = requireCredentials(config);
+      if (!input.paymentNo) {
+        throw new PaymentError(
+          "VALIDATION",
+          `${MESSAGE_PREFIX} 轉條碼需要 paymentNo（CVS 繳費代碼）`,
+          PROVIDER,
+        );
+      }
+      if (!CVS_BARCODE_CHAINS.has(input.chain)) {
+        throw new PaymentError(
+          "VALIDATION",
+          `${MESSAGE_PREFIX} CVSType 僅支援 ${[...CVS_BARCODE_CHAINS].join(" / ")}` +
+            `（收到 "${input.chain}"）；CVS 與 OK 不支援轉三段式條碼`,
+          PROVIDER,
+        );
+      }
+
+      const decoded = await post(
+        ECPAY_PAYCODE_PATHS.queryCvsBarcode,
+        { MerchantID: merchantId, PaymentNo: input.paymentNo, CVSType: input.chain },
+        "QueryCVSBarcode",
+      );
+      assertRtnOk(decoded, "QueryCVSBarcode");
+
+      const cvsInfo = asRecord(decoded.CVSInfo);
+      const rtnCode = Number(decoded.RtnCode);
+      return {
+        paymentNo: input.paymentNo,
+        chain: input.chain,
+        barcode1: str(cvsInfo.Barcode1) || undefined,
+        barcode2: str(cvsInfo.Barcode2) || undefined,
+        barcode3: str(cvsInfo.Barcode3) || undefined,
+        expireDate: str(cvsInfo.ExpireDate) || undefined,
+        rtnCode: Number.isFinite(rtnCode) ? rtnCode : -1,
+        rtnMsg: str(decoded.RtnMsg),
+        raw: decoded,
+      };
+    },
+
+    async downloadTradeMedia(input: EcpayTradeMediaQuery): Promise<EcpayTradeMediaResult> {
+      assertSupports(PROVIDER, CAPABILITIES, "GET_PAYMENT");
+      const { merchantId, hashKey, hashIv } = requireCredentials(config);
+      assertTradeMediaQuery(input);
+
+      const { text, contentType } = await ecpgPostForText({
+        url: `${origin}${ECPAY_PAYCODE_PATHS.queryTradeMedia}`,
+        merchantId,
+        hashKey,
+        hashIv,
+        data: {
+          MerchantID: merchantId,
+          DateType: input.dateType,
+          BeginDate: input.beginDate,
+          EndDate: input.endDate,
+          ...(input.paymentType ? { PaymentType: input.paymentType } : {}),
+        },
+        label: "QueryTradeMedia",
+        provider: PROVIDER,
+        messagePrefix: MESSAGE_PREFIX,
+      });
+
+      return { csv: text, contentType };
+    },
+
     verifyPaymentNotify(
       input: EcpayPayCodeNotifyEnvelope | string | Record<string, unknown>,
     ): EcpayPayCodeNotify {
@@ -322,6 +494,69 @@ export function createEcpayPayCodeProvider(
       );
     },
   };
+}
+
+/** ECPay's own casing — `iBon`, not `IBON`. `CVS`/`OK` are rejected by the API. */
+const CVS_BARCODE_CHAINS: ReadonlySet<string> = new Set(["Family", "Hilife", "iBon"]);
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
+/** ECPay caps the 撥款對帳檔 window at one month. */
+const MAX_MEDIA_RANGE_DAYS = 31;
+
+function assertTradeMediaQuery(input: EcpayTradeMediaQuery): void {
+  if (input.dateType !== "1" && input.dateType !== "2") {
+    throw new PaymentError(
+      "VALIDATION",
+      `${MESSAGE_PREFIX} DateType 需為 "1"（結算日期）或 "2"（撥款日期）`,
+      PROVIDER,
+    );
+  }
+  for (const [label, value] of [
+    ["beginDate", input.beginDate],
+    ["endDate", input.endDate],
+  ] as const) {
+    if (!ISO_DATE.test(value)) {
+      throw new PaymentError(
+        "VALIDATION",
+        `${MESSAGE_PREFIX} ${label} 需為 yyyy-MM-dd（收到 "${value}"）`,
+        PROVIDER,
+      );
+    }
+  }
+
+  const begin = Date.parse(`${input.beginDate}T00:00:00Z`);
+  const end = Date.parse(`${input.endDate}T00:00:00Z`);
+  if (Number.isNaN(begin) || Number.isNaN(end)) {
+    throw new PaymentError(
+      "VALIDATION",
+      `${MESSAGE_PREFIX} beginDate / endDate 不是有效日期`,
+      PROVIDER,
+    );
+  }
+  // ECPay's own doc sample has BeginDate after EndDate, which returns nothing —
+  // catch the swap locally rather than shipping an empty report.
+  if (begin > end) {
+    throw new PaymentError(
+      "VALIDATION",
+      `${MESSAGE_PREFIX} beginDate (${input.beginDate}) 不可晚於 endDate (${input.endDate})`,
+      PROVIDER,
+    );
+  }
+  const days = (end - begin) / 86_400_000;
+  if (days > MAX_MEDIA_RANGE_DAYS) {
+    throw new PaymentError(
+      "VALIDATION",
+      `${MESSAGE_PREFIX} 對帳檔查詢區間最大 1 個月（收到 ${days} 天）`,
+      PROVIDER,
+    );
+  }
+  if (input.paymentType && !["03", "04", "05"].includes(input.paymentType)) {
+    throw new PaymentError(
+      "VALIDATION",
+      `${MESSAGE_PREFIX} PaymentType 需為 03（ATM）/ 04（超商代碼）/ 05（超商條碼）`,
+      PROVIDER,
+    );
+  }
 }
 
 const CHOOSE_PAYMENT: Record<EcpayPayCodeMethod, string> = {

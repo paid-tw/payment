@@ -328,3 +328,126 @@ export const NOTIFY_ENVELOPE_SHAPE = {
   TransCode: 1,
   TransMsg: "Success",
 } as const;
+
+// --- QueryCVSBarcode, recorded live 2026-08-01 -----------------------------------
+//
+// One CVS 取號 (`LLL26213917414`) converted for all three chains in a row. The
+// segments are genuinely **chain-specific**, which the doc does not say: `Barcode2`
+// is an opaque token for iBon but the zero-padded PaymentNo for Family/Hilife, and
+// `Barcode3` differs across all three. A barcode fetched for one chain therefore
+// cannot be shown at another.
+//
+// Also undocumented: the response echoes a top-level `PaymentNo`, and `RtnMsg` is
+// `"成功"` rather than the `"Success"` the doc sample shows.
+
+export const CVS_BARCODE_IBON = {
+  PlatformID: "",
+  MerchantID: "3002607",
+  PaymentNo: "LLL26213917414",
+  CVSInfo: {
+    Barcode1: "1508015G8",
+    Barcode2: "06080152ZI0XXU01",
+    Barcode3: "770928230000150",
+    ExpireDate: "2026/08/08 09:18:09",
+  },
+  RtnCode: 1,
+  RtnMsg: "成功",
+} as const;
+
+export const CVS_BARCODE_FAMILY = {
+  PlatformID: "",
+  MerchantID: "3002607",
+  PaymentNo: "LLL26213917414",
+  CVSInfo: {
+    Barcode1: "150801KKS",
+    Barcode2: "00LLL26213917414",
+    Barcode3: "093065000000150",
+    ExpireDate: "2026/08/08 09:18:09",
+  },
+  RtnCode: 1,
+  RtnMsg: "成功",
+} as const;
+
+export const CVS_BARCODE_HILIFE = {
+  PlatformID: "",
+  MerchantID: "3002607",
+  PaymentNo: "LLL26213917414",
+  CVSInfo: {
+    Barcode1: "150801MEM",
+    Barcode2: "00LLL26213917414",
+    Barcode3: "080178000000150",
+    ExpireDate: "2026/08/08 09:18:09",
+  },
+  RtnCode: 1,
+  RtnMsg: "成功",
+} as const;
+
+// --- QueryTradeMedia, recorded live 2026-08-01 ----------------------------------
+
+/**
+ * A real 撥款對帳檔 body for a range with no settled orders: the header row and
+ * nothing else. Three things the doc does not tell you, all load-bearing:
+ *
+ *   - **Every cell is Excel-armoured as `="value"`.** That is the spreadsheet trick
+ *     for forcing text so long trade numbers do not turn into scientific notation.
+ *     A naive `split(",")` yields cells that literally contain `="特店交易編號"`.
+ *     Use {@link import("../provider.js").parseTradeMediaCsv} rather than parsing by hand.
+ *   - **There is a 13th column, `金流處理費`,** which doc 41186's 12-column list omits
+ *     (it matches the `ProcessFee` field ECPay added 2025/04/01 elsewhere).
+ *   - `Content-Type` is `text/plain`, not `text/csv`, and rows end `\r\n`.
+ *
+ * An empty result is this header alone — not an error, and not an empty body.
+ */
+export const TRADE_MEDIA_EMPTY_CSV =
+  '="特店交易編號",="綠界交易編號",="交易日期",="付款方式",="手續費率",="結算日期",' +
+  '="撥款日期",="交易金額",="金流手續費",="平台手續費",="退款金額",="應收款項(淨額)",' +
+  '="金流處理費"\r\n';
+
+/** The recorded header, split out so tests can assert the column set. */
+export const TRADE_MEDIA_COLUMNS = [
+  "特店交易編號",
+  "綠界交易編號",
+  "交易日期",
+  "付款方式",
+  "手續費率",
+  "結算日期",
+  "撥款日期",
+  "交易金額",
+  "金流手續費",
+  "平台手續費",
+  "退款金額",
+  "應收款項(淨額)",
+  "金流處理費",
+] as const;
+
+/**
+ * One data row in the real armoured format. **Synthesised, not recorded** — the
+ * stage merchant has no settled orders (its 取號 orders are all unpaid), so we have
+ * never seen a populated row. Shaped from {@link TRADE_MEDIA_COLUMNS} and the
+ * recorded armouring, and only used to prove the parser handles data rows.
+ */
+export const TRADE_MEDIA_ONE_ROW_CSV =
+  TRADE_MEDIA_EMPTY_CSV +
+  '="PCATM85542622715",="2608010803430236",="2026/08/01 08:03:43",="ATM",="1.0000",' +
+  '="2026/08/02",="2026/08/05",="123",="1.2300",="0.0000",="0",="121",="0.0000"\r\n';
+
+/**
+ * An outer `TransCode: 128 "System exception"` with empty `Data` **and** empty
+ * `MerchantID`, seen once on stage 2026-08-01 and not reproducible on retry — the
+ * same request succeeded moments later.
+ *
+ * Cause unconfirmed. It is *not* the IP allow-list, which was the obvious guess:
+ * this machine is not allow-listed and the call still succeeds, so the allow-list
+ * either is not enforced on stage or is not what 128 means. Most likely the
+ * documented "one file per minute" throttle.
+ *
+ * Kept as a fixture regardless: whatever it means, "System exception" tells the
+ * caller nothing, and the adapter must raise it rather than persist it as a report.
+ */
+export const TRADE_MEDIA_TRANSCODE_128 = {
+  MerchantID: "",
+  RpHeader: { Timestamp: 1_785_547_131 },
+  Data: "",
+  TransCode: 128,
+  TransMsg: "System exception",
+} as const;

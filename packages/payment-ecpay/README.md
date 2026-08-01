@@ -197,6 +197,47 @@ ATM 天數傳，會拿到完全不同期限的帳號。超過 30 天需另向綠
 - 條碼只回三段號碼，不回圖檔，需自行轉 Code39。`barcode1` 不是純數字
   （實測 `1508086CY`）。
 
+### 超商代碼轉三段式條碼
+
+消費者不想在超商機台輸入代碼時，可以把 `paymentNo` 轉成可掃的三段條碼：
+
+```ts
+const bar = await paycode.getCvsBarcode({ paymentNo: "LLL26213917403", chain: "iBon" });
+// bar.barcode1/2/3 + bar.expireDate
+```
+
+⚠️ **每家超商的條碼不一樣**（實測：同一個 `paymentNo` 三家回傳的 `Barcode1`/`Barcode3`
+全不同，`Barcode2` 在 iBon 是一組 token、全家/萊爾富則是補零後的代碼）。所以要先知道
+消費者去哪家，不能拿一家的條碼去另一家用。
+
+其他限制：`chain` 只支援 `Family` / `Hilife` / `iBon`（**取號時**的 `CVS`、`OK` 不支援
+轉條碼；而且注意大小寫是 `iBon` 不是取號用的 `IBON`），訂單已付款或已過期會失敗，
+每次轉換有效 10 分鐘。
+
+### 下載撥款對帳檔
+
+```ts
+const media = await paycode.downloadTradeMedia({
+  dateType: "1", // 1=結算日期 2=撥款日期
+  beginDate: "2026-07-01",
+  endDate: "2026-07-31", // 區間最大 1 個月
+  paymentType: "04", // 選填：03 ATM / 04 超商代碼 / 05 超商條碼
+});
+
+import { parseTradeMediaCsv } from "@paid-tw/payment-ecpay";
+const rows = parseTradeMediaCsv(media.csv);
+```
+
+⚠️ **這支 API 回傳 CSV，不是 AES 信封**，而且**每個欄位都被包成 `="值"`**（Excel 強制
+文字的寫法，避免長交易編號被轉成科學記號）。直接 `split(",")` 會拿到字面上帶
+`="…"` 的內容，請用 `parseTradeMediaCsv()`。
+
+實測還有兩點文件沒寫：真實檔案有**第 13 個欄位 `金流處理費`**（文件只列 12 個），
+`Content-Type` 是 `text/plain`。查無資料時回傳只有標題列，不是錯誤。
+
+綠界端另有限制：**呼叫 IP 需在廠商後台加白名單**（系統開發管理 → 系統介接設定），
+且**一分鐘只能下載一個檔**。呼叫太快會拿到 HTTP 403，要等 30 分鐘。
+
 ### 錄製真實的付款通知
 
 通知沒辦法用測試觸發——綠界只在真的有人繳費、或有人在後台按「模擬付款」時才發，
