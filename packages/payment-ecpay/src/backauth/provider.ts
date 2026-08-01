@@ -136,11 +136,20 @@ export interface EcpayBackAuthFields {
  * 定期定額 schedule. All four fields are required together — ECPay treats a partial
  * schedule as a malformed order rather than defaulting the rest.
  *
- * ⚠️ Creating one of these schedules a **recurring charge**. `execTimes` is how many
- * times ECPay will authorize, so the total taken is roughly `amount * execTimes`.
+ * ⚠️ Creating one of these **starts real recurring charges**, and the first one happens
+ * immediately. `execTimes` counts every authorization including that first one, so the
+ * total taken is roughly `amount * execTimes`. ECPay has no endpoint to delete a
+ * schedule — `Cancel` is the only way to stop it, and it cannot be undone.
  */
 export interface EcpayPeriodSchedule {
-  /** Amount authorized on **each** cycle. */
+  /**
+   * `PeriodAmount` — the amount authorized on **each** cycle.
+   *
+   * Distinct from the request's own `amount`, which becomes `TotalAmount` and is what
+   * the *first* cycle charges. Keep the two equal unless you mean to price the first
+   * cycle differently (a trial or a joining fee); a mismatch is a legitimate order to
+   * ECPay, so nothing will flag an accidental one.
+   */
   amount: number;
   /** `D` daily, `M` monthly, `Y` yearly. */
   type: "D" | "M" | "Y";
