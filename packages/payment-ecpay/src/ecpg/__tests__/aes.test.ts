@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { ECPAY_SANDBOX } from "../../config.js";
 import { aesEncrypt, decryptData, encryptData, phpUrlDecode, phpUrlEncode } from "../aes.js";
 import { AES_VECTORS, URL_ENCODE_VECTORS } from "./aes-vectors.js";
+import type { AesVector } from "./aes-vectors.js";
 
 const KEY = ECPAY_SANDBOX.hashKey;
 const IV = ECPAY_SANDBOX.hashIv;
@@ -52,6 +53,17 @@ describe("ECPay AES Data crypto", () => {
   });
 });
 
+/**
+ * Look a golden vector up by name instead of by position. Indexing is `| undefined`
+ * under `noUncheckedIndexedAccess`, and — worse — a positional reference silently
+ * points at a different vector if anyone reorders the fixture list.
+ */
+function vectorNamed(fragment: string): AesVector {
+  const found = AES_VECTORS.find((v) => v.name.includes(fragment));
+  if (!found) throw new Error(`no AES vector matching ${fragment}`);
+  return found;
+}
+
 describe("ECPay official AES vectors", () => {
   it.each(AES_VECTORS.map((v) => [v.name, v] as const))("%s", (_name, vector) => {
     const { hashKey, hashIv, plaintextJson, expectedUrlEncoded, expectedBase64 } = vector;
@@ -71,14 +83,15 @@ describe("ECPay official AES vectors", () => {
   it("produces byte-identical output for an object literal in the documented key order", () => {
     // Guards the whole encryptData path (JSON.stringify → urlencode → AES) against
     // the golden, not just the crypto tail.
-    const vector = AES_VECTORS[0];
+    const vector = vectorNamed("插入順序");
     expect(
       encryptData({ MerchantID: "2000132", BarCode: "/1234567" }, vector.hashKey, vector.hashIv),
     ).toBe(vector.expectedBase64);
   });
 
   it("key order changes the ciphertext, so it must never be normalized", () => {
-    const [insertionOrder, alphabetical] = AES_VECTORS;
+    const insertionOrder = vectorNamed("插入順序");
+    const alphabetical = vectorNamed("字母序");
     expect(insertionOrder.expectedBase64).not.toBe(alphabetical.expectedBase64);
     expect(
       encryptData(

@@ -13,6 +13,17 @@ import {
   TRADE_MEDIA_ONE_ROW_CSV,
   TRADE_MEDIA_TRANSCODE_128,
 } from "./paycode-fixtures.js";
+
+/**
+ * The first parsed row, asserted to exist. Indexing an array yields `T | undefined`
+ * under `noUncheckedIndexedAccess`, and a test that means "row 1 says X" should fail
+ * with that sentence rather than on a property of `undefined`.
+ */
+function firstRow(rows: Record<string, string>[]): Record<string, string> {
+  const [row] = rows;
+  if (!row) throw new Error("expected at least one parsed row");
+  return row;
+}
 import {
   BASE,
   envelope,
@@ -304,8 +315,9 @@ describe("parseTradeMediaCsv", () => {
     // gives you keys and values that literally contain `="…"`.
     const rows = parseTradeMediaCsv(TRADE_MEDIA_ONE_ROW_CSV);
     expect(rows).toHaveLength(1);
-    expect(rows[0]["特店交易編號"]).toBe("PCATM85542622715");
-    expect(rows[0]["交易金額"]).toBe("123");
+    const row = firstRow(rows);
+    expect(row["特店交易編號"]).toBe("PCATM85542622715");
+    expect(row["交易金額"]).toBe("123");
     expect(JSON.stringify(rows)).not.toContain('="');
   });
 
@@ -313,7 +325,7 @@ describe("parseTradeMediaCsv", () => {
     // The real header has 13 columns; doc 41186 lists 12. Reading row 1 means an
     // added column becomes a new key instead of shifting every value by one.
     const rows = parseTradeMediaCsv(TRADE_MEDIA_ONE_ROW_CSV);
-    expect(Object.keys(rows[0])).toEqual([...TRADE_MEDIA_COLUMNS]);
+    expect(Object.keys(firstRow(rows))).toEqual([...TRADE_MEDIA_COLUMNS]);
     expect(TRADE_MEDIA_COLUMNS).toContain("金流處理費");
   });
 

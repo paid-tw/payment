@@ -15,7 +15,6 @@ import {
 } from "./ecpay-server.js";
 import {
   QUERY_BAD_MERTRADENO,
-  QUERY_NOT_FOUND,
   QUERY_PAID,
   STAGE_PAID_MER_TRADE_NO,
   STAGE_PROBE_MER_TRADE_NO,
