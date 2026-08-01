@@ -45,3 +45,29 @@ export type {
   EcpgNotifyEnvelope,
   EcpgPaymentNotify,
 } from "./ecpg/notify.js";
+
+// 非信用卡幕後取號 — separate factory / name "ecpay-paycode"
+export { createEcpayPayCodeProvider } from "./paycode/provider.js";
+export type {
+  EcpayAtmCode,
+  EcpayBarcodeCode,
+  EcpayCvsChain,
+  EcpayCvsCode,
+  EcpayPayCodeCreateInput,
+  EcpayPayCodeFields,
+  EcpayPayCodeMethod,
+  EcpayPayCodeProvider,
+  EcpayPayCodeResult,
+} from "./paycode/provider.js";
+export {
+  ECPAY_PAYCODE_ORIGINS,
+  ECPAY_PAYCODE_PATHS,
+  resolvePayCodeOrigin,
+} from "./paycode/config.js";
+export type { EcpayPayCodeProviderConfig } from "./paycode/config.js";
+export { ECPAY_PAYCODE_NOTIFY_ACK, verifyEcpayPayCodeNotify } from "./paycode/notify.js";
+export type {
+  EcpayPayCodeNotify,
+  EcpayPayCodeNotifyCredentials,
+  EcpayPayCodeNotifyEnvelope,
+} from "./paycode/notify.js";
