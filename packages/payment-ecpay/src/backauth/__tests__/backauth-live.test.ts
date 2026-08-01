@@ -69,7 +69,9 @@ describe.skipIf(!live)("ECPay 幕後授權 live — stage", LIVE_OPTS, () => {
     expect(result.card?.card6No).toBe("431195");
     expect(result.card?.card4No).toBe("2222");
     expect(JSON.stringify(result)).not.toContain(baseInput().card.cardNo);
-    // gwsr is the handle 請退款 needs later.
+    // gwsr is the bank authorization reference — NOT a DoAction input; refunds take
+    // tradeNo (asserted below). Kept because it is what 信用卡單筆明細查詢 and
+    // reconciliation use.
     expect(result.card?.gwsr).toBeGreaterThan(0);
     expect(result.card?.authCode).toBeTruthy();
     // Eci 0 = this did not go through 3D, which is the point of this merchant.
