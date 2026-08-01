@@ -1,5 +1,12 @@
 # @paid-tw/payment-payuni
 
+## 0.1.1
+
+### Patch Changes
+
+- Updated dependencies [cdc2654]
+  - @paid-tw/payment@0.2.0
+
 ## 0.1.0
 
 ### Minor Changes

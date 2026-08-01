@@ -1,6 +1,6 @@
 {
   "name": "@paid-tw/payment",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Provider-agnostic core for Taiwan payment gateways: unified types, PaymentProvider interface, capabilities, and PaymentError.",
   "keywords": [
     "ecpay",

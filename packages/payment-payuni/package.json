@@ -1,6 +1,6 @@
 {
   "name": "@paid-tw/payment-payuni",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "PAYUNi 統一金流 adapter for @paid-tw/payment — trade query (create/refund WIP).",
   "keywords": [
     "payment",
