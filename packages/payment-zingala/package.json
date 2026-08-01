@@ -1,6 +1,6 @@
 {
   "name": "@paid-tw/payment-zingala",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "中租零卡分期 (Zingala) BNPL adapter for @paid-tw/payment",
   "keywords": [
     "bnpl",
