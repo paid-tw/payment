@@ -127,3 +127,92 @@ describe("ECPG_NOTIFY_ACK", () => {
     expect(ECPG_NOTIFY_ACK).toBe("1|OK");
   });
 });
+
+describe("null / empty coercion in AES-JSON notifies", () => {
+  const wrap = (data: Record<string, unknown>) => ({
+    MerchantID: "3002607",
+    TransCode: 1,
+    Data: encryptData(data, KEY, IV),
+  });
+  const verify = (data: Record<string, unknown>) =>
+    verifyEcpgPaymentNotify(wrap(data), { hashKey: KEY, hashIv: IV });
+
+  const base = { RtnCode: 1, MerchantID: "3002607" };
+
+  it('never emits the literal string "null" when a sibling field is null', () => {
+    // ECPay mixes "" and null for "no value" across endpoints (QueryTrade sends
+    // null ATM payer fields, the notify sends ""). A bare String(null) produced
+    // bankCode: "null", which reads as a real bank code to any caller.
+    const result = verify({
+      ...base,
+      OrderInfo: { MerchantTradeNo: "X1", PaymentType: "ATM" },
+      ATMInfo: { ATMAccBank: null, ATMAccNo: "12345" },
+    });
+    expect(result.atm).toEqual({ accountNo: "12345" });
+    expect(result.atm?.bankCode).toBeUndefined();
+    expect(JSON.stringify(result.atm)).not.toContain("null");
+  });
+
+  it("treats null CVS fields as missing, including the anti-fraud store ids", () => {
+    // payStoreId: "null" would pass a truthiness check and be shown to staff as
+    // the paying store.
+    const result = verify({
+      ...base,
+      OrderInfo: { MerchantTradeNo: "X2", PaymentType: "CVS" },
+      CVSInfo: { PaymentNo: null, PayFrom: "family", PayStoreID: null, PayStoreName: "" },
+    });
+    expect(result.cvs).toEqual({ payFrom: "family" });
+  });
+
+  it("treats empty strings the same as null", () => {
+    const result = verify({
+      ...base,
+      OrderInfo: { MerchantTradeNo: "X3", PaymentType: "ATM" },
+      ATMInfo: { ATMAccBank: "", ATMAccNo: "" },
+    });
+    expect(result.atm).toBeUndefined();
+  });
+
+  it("drops null scalars on the order itself rather than stringifying them", () => {
+    const result = verify({
+      ...base,
+      RtnMsg: null,
+      OrderInfo: {
+        MerchantTradeNo: "X4",
+        PaymentType: "ATM",
+        TradeNo: null,
+        PaymentDate: null,
+        TradeDate: "",
+        TradeStatus: null,
+        TradeAmt: null,
+      },
+    });
+    expect(result.rtnMsg).toBe("");
+    expect(result.tradeNo).toBeUndefined();
+    expect(result.paidAt).toBeUndefined();
+    expect(result.tradeDate).toBeUndefined();
+    expect(result.tradeStatus).toBeUndefined();
+    expect(result.amount).toBeUndefined();
+    expect(JSON.stringify(result).includes('"null"')).toBe(false);
+  });
+
+  it("keeps a card block when only some fields are null", () => {
+    const result = verify({
+      ...base,
+      OrderInfo: { MerchantTradeNo: "X5", PaymentType: "Credit" },
+      CardInfo: { AuthCode: "777777", Card6No: null, Card4No: "2222", Amount: 100, Gwsr: null },
+    });
+    expect(result.card).toEqual({ authCode: "777777", card4No: "2222", amount: 100 });
+    expect(result.creditRefundId).toBeUndefined();
+  });
+
+  it("keeps falsy-but-real numeric values", () => {
+    // 0 is a legitimate value; the coercion must not treat it as missing.
+    const result = verify({
+      ...base,
+      OrderInfo: { MerchantTradeNo: "X6", PaymentType: "ATM", TradeAmt: 0, TradeStatus: 0 },
+    });
+    expect(result.amount).toBe(0);
+    expect(result.tradeStatus).toBe("0");
+  });
+});
