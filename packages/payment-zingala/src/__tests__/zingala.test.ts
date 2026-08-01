@@ -434,6 +434,18 @@ describe("capture", () => {
     expect(result.store).toBeUndefined();
   });
 
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, 0, -1])(
+    "refuses the amount %j before it becomes null on the wire",
+    async (amount) => {
+      // Math.round(NaN) is NaN, and JSON.stringify turns that into `null` — so an
+      // unvalidated amount reaches 中租 as a missing field and comes back as a confusing
+      // 200 or 900. No handler is registered, so anything escaping validation fails here.
+      const err = await caught(testClient().capture({ orderId: "ORDER1", amount }));
+      expect(err.code).toBe("VALIDATION");
+      expect(err.message).toContain("請款 amount");
+    },
+  );
+
   it("treats 199 as the retryable batch-not-run case", async () => {
     server.use(
       respondWith(PATHS.capture, {
@@ -455,6 +467,15 @@ describe("refund", () => {
     expect(err.code).toBe("CONFLICT");
     expect(err.rawCode).toBe("103");
   });
+
+  it.each([Number.NaN, Number.POSITIVE_INFINITY, 0, -1])(
+    "refuses the refund amount %j",
+    async (refundAmount) => {
+      const err = await caught(testClient().refund({ orderId: "ORDER1", refundAmount }));
+      expect(err.code).toBe("VALIDATION");
+      expect(err.message).toContain("退款 refundAmount");
+    },
+  );
 
   it("reads refund_id as a string, as manual 1.1.8 changed it", async () => {
     server.use(

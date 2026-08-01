@@ -306,6 +306,7 @@ export function createZingalaClient(config: ZingalaConfig): ZingalaClient {
       if (!input.orderId) {
         throw new PaymentError("VALIDATION", `${MESSAGE_PREFIX} 請款需要 orderId`, PROVIDER);
       }
+      assertAmount(input.amount, "請款 amount");
       const { data } = await zingalaPost(
         config,
         ZINGALA_PATHS.capture,
@@ -329,6 +330,7 @@ export function createZingalaClient(config: ZingalaConfig): ZingalaClient {
       if (!input.orderId) {
         throw new PaymentError("VALIDATION", `${MESSAGE_PREFIX} 退款需要 orderId`, PROVIDER);
       }
+      assertAmount(input.refundAmount, "退款 refundAmount");
       const { data } = await zingalaPost(
         config,
         ZINGALA_PATHS.refund,
@@ -413,6 +415,24 @@ export function createZingalaClient(config: ZingalaConfig): ZingalaClient {
       );
     },
   };
+}
+
+/**
+ * Guard an amount before it reaches `Math.round`.
+ *
+ * `Math.round(NaN)` is `NaN`, which `JSON.stringify` turns into `null` — so an
+ * unvalidated amount arrives at 中租 as a missing field and comes back as a confusing
+ * `200 參數錯誤` or, worse, `900 系統發生錯誤`. Non-positive amounts have no meaning for
+ * either call.
+ */
+function assertAmount(value: number, label: string): void {
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new PaymentError(
+      "VALIDATION",
+      `${MESSAGE_PREFIX} ${label} 必須是大於 0 的有限數值（收到 ${String(value)}）`,
+      PROVIDER,
+    );
+  }
 }
 
 function assertApplyInput(input: ZingalaApplyInput): void {
