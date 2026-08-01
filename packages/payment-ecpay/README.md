@@ -226,6 +226,13 @@ cloudflared tunnel --url http://localhost:8787   # 另一個 shell，取得公�
 都不會經過你的主機，所以你落在 PCI-DSS **SAQ A**；一旦自己收卡號，就變成 **SAQ D**，
 稽核與基礎架構的要求完全不同等級。
 
+範圍是由「**你是否處理卡號**」決定，不是由「程式碼在不在 bundle 裡」決定 —— 所以只要
+不呼叫 `createEcpayBackAuthProvider`，你仍然在 SAQ A。但要注意目前的隔離程度：BackAuth
+是獨立 factory、獨立模組，可是它從套件根目錄 re-export，而且套件只發佈 `"."` 這一個
+entry，所以 `import "@paid-tw/payment-ecpay"` 會連帶載入這個模組。也就是說，你**無法只靠
+import graph 證明**某個 app 不含 raw-PAN 介面。若需要那種可稽核性，得加 `./backauth`
+subpath export（討論見 PR #3）。
+
 請確定你真的需要「後端直接拿卡號授權、消費者不看任何付款頁」這個能力，而不是因為它
 用起來比較方便。如果只是要收信用卡，用 AIO 或站內付 2.0。
 
