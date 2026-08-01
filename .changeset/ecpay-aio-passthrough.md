@@ -26,10 +26,13 @@ rather than merging them, each throwing `VALIDATION`.
   `ChooseSubPayment`, `OrderResultURL`, `IgnorePayment`, `PlatformID`,
   `CustomField1`-`4`, `Language`, `PaymentInfoURL`, `ClientRedirectURL`. Use the named
   option (`storeId`, `remark`, …). If you passed one of these through `params` against a
-  pre-release build it silently won over the typed field; it now throws instead.
-- **Object-internal names and malformed identifiers** — `__proto__`, `constructor`,
-  `prototype`, and anything that is not an ASCII identifier. ECPay has no such fields, and
-  `constructor`/`prototype` were previously signed and sent.
+  pre-release build, the `params` value silently took precedence over the typed option;
+  it now throws instead.
+- **Object-internal names, and any name that is not a valid field name** — `__proto__`,
+  `constructor`, `prototype`, plus anything that does not match
+  `/^[A-Za-z][A-Za-z0-9_]*$/`. Note the leading character must be a **letter**, so
+  `_Foo` throws as well as `9foo` and `has-dash`. ECPay has no fields by any of those
+  names, and `constructor`/`prototype` were previously signed and sent.
 
 New `verifyEcpayPaymentInfoNotify` for the 取號結果通知 that `PaymentInfoURL` and
 `ClientRedirectURL` deliver.
