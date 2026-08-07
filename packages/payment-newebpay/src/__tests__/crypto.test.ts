@@ -107,7 +107,12 @@ const OSS_CHECKVALUE = {
 const OSS_CHECKCODE = {
   key: "abcdefg",
   iv: "1234567",
-  fields: { MerchantOrderNo: "840f022", MerchantID: "1422967", Amt: 100, TradeNo: "14061313541640927" },
+  fields: {
+    MerchantOrderNo: "840f022",
+    MerchantID: "1422967",
+    Amt: 100,
+    TradeNo: "14061313541640927",
+  },
   expected: "62C687AF6409E46E79769FAF54F54FE7E75AAE50BAF0767752A5C337670B8EDB",
 };
 
