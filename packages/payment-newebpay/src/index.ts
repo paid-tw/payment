@@ -35,3 +35,21 @@ export {
   tradeSha,
 } from "./crypto.js";
 export { NEWEBPAY_ERROR_MESSAGES, mapNewebpayErrorCode, newebpayErrorMessage } from "./codes.js";
+
+// 信用卡定期定額 — separate factory / name "newebpay-period". Takes no card data
+// (the consumer types the card on NewebPay's hosted page), so it lives on the
+// root entry, unlike ecpay's raw-PAN backauth subpath.
+export { createNewebpayPeriodProvider, NEWEBPAY_PERIOD_VERSIONS } from "./period/provider.js";
+export type {
+  NewebpayPeriodProvider,
+  NewebpayPeriodType,
+  NewebpayPeriodAlterType,
+  NewebpayPeriodCreateInput,
+  NewebpayPeriodCheckoutForm,
+  NewebpayPeriodAlterStatusInput,
+  NewebpayPeriodAlterStatusResult,
+  NewebpayPeriodAlterAmtInput,
+  NewebpayPeriodAlterAmtResult,
+} from "./period/provider.js";
+export { verifyPeriodCreateNotify, verifyPeriodCycleNotify } from "./period/notify.js";
+export type { NewebpayPeriodCreateNotify, NewebpayPeriodCycleNotify } from "./period/notify.js";

@@ -296,7 +296,7 @@ function assertNotifyAuthentic(
  * The decrypted TradeInfo is JSON (`RespondType=JSON`) or a query string
  * (`RespondType=String`, fields flat at the top level).
  */
-function parseDecryptedPayload(plain: string): Record<string, unknown> {
+export function parseDecryptedPayload(plain: string): Record<string, unknown> {
   const trimmed = plain.trim();
   if (trimmed.startsWith("{")) {
     try {
@@ -309,7 +309,7 @@ function parseDecryptedPayload(plain: string): Record<string, unknown> {
 }
 
 /** JSON payloads nest fields under `Result`; String payloads are flat. */
-function extractResult(decrypted: Record<string, unknown>): Record<string, unknown> {
+export function extractResult(decrypted: Record<string, unknown>): Record<string, unknown> {
   const result = decrypted.Result;
   if (Array.isArray(result)) return (result[0] ?? {}) as Record<string, unknown>;
   if (result && typeof result === "object") return result as Record<string, unknown>;
