@@ -24,6 +24,8 @@
     "test:live:ecpay:credit": "ECPAY_LIVE=1 vitest run packages/payment-ecpay/src/credit/__tests__/credit-live.test.ts",
     "test:live:ecpay:period": "ECPAY_LIVE=1 vitest run packages/payment-ecpay/src/backauth/__tests__/period-live.test.ts",
     "test:live:zingala": "ZINGALA_LIVE=1 vitest run packages/payment-zingala/src/__tests__/zingala-live.test.ts",
+    "test:live:newebpay": "NEWEBPAY_LIVE=1 vitest run packages/payment-newebpay/src/__tests__/live.test.ts",
+    "test:live:newebpay:period": "NEWEBPAY_LIVE=1 vitest run packages/payment-newebpay/src/period/__tests__/period-live.test.ts",
     "capture:ecpay-notify": "unrun scripts/ecpay-notify-capture.mjs",
     "lint": "oxlint --type-aware",
     "format": "oxfmt --write",
