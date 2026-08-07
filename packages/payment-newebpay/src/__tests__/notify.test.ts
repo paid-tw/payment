@@ -225,11 +225,11 @@ describe("verifyNewebpayGetCodeNotify — 取號完成 (CustomerURL)", () => {
     const notify = verifyNewebpayGetCodeNotify(notifyEnvelope(GETCODE_VACC_JSON), CREDENTIALS);
     expect(notify.success).toBe(true);
     expect(notify.method).toBe("atm");
-    expect(notify.merTradeNo).toBe("order_atm_001");
-    expect(notify.amount).toBe(1200);
-    expect(notify.expireDate).toBe("2026-08-08");
-    expect(notify.expireTime).toBe("235959");
-    expect(notify.atm).toMatchObject({ bankCode: "031", codeNo: "1234567890123" });
+    expect(notify.merTradeNo).toBe("paidlive1786134867");
+    expect(notify.amount).toBe(30);
+    expect(notify.expireDate).toBe("2026-08-15");
+    expect(notify.expireTime).toBe("23:59:59");
+    expect(notify.atm).toMatchObject({ bankCode: "004", codeNo: "TestAccount12345" });
     expect(notify.cvs).toBeUndefined();
   });
 
@@ -252,7 +252,7 @@ describe("provider notify methods", () => {
       }).success,
     ).toBe(true);
     expect(provider.verifyGetCodeNotify(notifyEnvelope(GETCODE_VACC_JSON)).atm?.codeNo).toBe(
-      "1234567890123",
+      "TestAccount12345",
     );
   });
 });

@@ -56,6 +56,17 @@ Legend: ✅ implemented + tested · 🟡 partial / notes · ❌ not implemented 
   bogus mandate → PER10067 delivered INSIDE the encrypted `period` envelope.
   All three prove CheckValue signing, the PostData* envelope, and periodic
   response decryption end-to-end against the real gateway.
+- **E2E creation verified 2026-08-08**: a real VACC order was created through
+  the MPG page by browser automation (localhost-served auto-submit form — the
+  file:// scheme is blocked but a local HTTP origin passes the MPG02005 source
+  check), the 取號 result POSTed to CustomerURL (webhook.site) verified with
+  `verifyGetCodeNotify`, and the order queried live (TradeStatus 0 +
+  `PayInfo "(004)TestAccount12345"`). Recording deltas folded into fixtures:
+  unpaid `PayTime` arrives as the ZERO-DATE `0000-00-00 00:00:00` (not empty),
+  and the get-code `ExpireTime` arrives coloned (`23:59:59`), not `His`.
+  ⚠️ The 1Password extension's inline card-save overlay steals browser-automation
+  focus on the credit-card form — use VACC/WebATM flows for automated runs, or
+  a profile without password-manager extensions for card runs.
 - **Paid-notify recording**: MPG and the mandate page are browser-only —
   record real paid notifies via tunnel + sandbox test card
   `4000-2211-1111-1111` (any expiry/CVC); VACC/CVS/BARCODE support 模擬觸發

@@ -199,11 +199,11 @@ describe("NewebPay getPayment — success shapes", () => {
     server.use(
       http.post(QUERY_URL, () => HttpResponse.json(querySuccess(QUERY_VACC_UNPAID_RESULT))),
     );
-    const data = await testProvider().getPayment({ merTradeNo: "order_atm_001", amount: 1200 });
+    const data = await testProvider().getPayment({ merTradeNo: "paidlive1786134867", amount: 30 });
     expect(data.status).toBe("unpaid");
     expect(data.method).toBe("atm");
     expect(data.paidAt).toBeUndefined();
-    expect((data.raw as Record<string, unknown>).PayInfo).toBe("(031)1234567890123");
+    expect((data.raw as Record<string, unknown>).PayInfo).toBe("(004)TestAccount12345");
   });
 
   it("maps OrderStatus 9 (付款中-待銀行確認) to pending", async () => {

@@ -6,11 +6,11 @@
 
 ## 會發布的套件
 
-| Package                     | 角色                   |
-| --------------------------- | ---------------------- |
-| `@paid-tw/payment`          | core                   |
-| `@paid-tw/payment-ecpay`    | ECPay AIO + 站內付 2.0 |
-| `@paid-tw/payment-payuni`   | PAYUNi                 |
+| Package                     | 角色                    |
+| --------------------------- | ----------------------- |
+| `@paid-tw/payment`          | core                    |
+| `@paid-tw/payment-ecpay`    | ECPay AIO + 站內付 2.0  |
+| `@paid-tw/payment-payuni`   | PAYUNi                  |
 | `@paid-tw/payment-newebpay` | NewebPay MPG + 定期定額 |
 
 各套件變更紀錄：`packages/*/CHANGELOG.md`。

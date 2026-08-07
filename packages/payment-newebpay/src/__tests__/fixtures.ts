@@ -74,20 +74,24 @@ export const QUERY_CREDIT_REFUNDED_RESULT = {
   BackBalance: "0",
 };
 
-/** Synthesized: unpaid ATM order with an issued virtual account (取號完成). */
+/**
+ * Recorded live 2026-08-08 (ccore, real 取號 order created through the MPG
+ * page; merchant id swapped for the doc sandbox one). Note the gateway sends
+ * PayTime as a ZERO-DATE ("0000-00-00 00:00:00"), not an empty string.
+ */
 export const QUERY_VACC_UNPAID_RESULT = {
   MerchantID: "MS127874575",
-  Amt: 1200,
-  TradeNo: "26080112345678901",
-  MerchantOrderNo: "order_atm_001",
+  Amt: 30,
+  TradeNo: "26080804351759265",
+  MerchantOrderNo: "paidlive1786134867",
   TradeStatus: "0",
-  OrderStatus: 0,
   PaymentType: "VACC",
-  CreateTime: "2026-08-01 10:00:00",
-  PayTime: "",
+  CreateTime: "2026-08-08 04:35:17",
+  PayTime: "0000-00-00 00:00:00",
   FundTime: "0000-00-00",
-  PayInfo: "(031)1234567890123",
-  ExpireDate: "2026-08-08 23:59:59",
+  PayInfo: "(004)TestAccount12345",
+  ExpireDate: "2026-08-15 23:59:59",
+  OrderStatus: 0,
 };
 
 /** Synthesized: TWQR order awaiting bank confirmation (OrderStatus 9 = 付款中). */
@@ -155,20 +159,27 @@ export const NOTIFY_CREDIT_DECLINED_JSON = JSON.stringify({
   },
 });
 
-/** Synthesized 取號完成 (get-code) payload for an ATM virtual account. */
+/**
+ * 取號完成 (get-code) payload for an ATM virtual account — recorded live
+ * 2026-08-08 from a real CustomerURL POST (merchant id swapped for the doc
+ * sandbox one). Note ExpireTime arrives COLONED ("23:59:59"), not the `His`
+ * format the manual documents for the request side.
+ */
 export const GETCODE_VACC_JSON = JSON.stringify({
   Status: "SUCCESS",
   Message: "取號成功",
   Result: {
     MerchantID: "MS127874575",
-    Amt: 1200,
-    TradeNo: "26080112345678901",
-    MerchantOrderNo: "order_atm_001",
+    Amt: 30,
+    TradeNo: "26080804351759265",
+    MerchantOrderNo: "paidlive1786134867",
     PaymentType: "VACC",
-    ExpireDate: "2026-08-08",
-    ExpireTime: "235959",
-    BankCode: "031",
-    CodeNo: "1234567890123",
+    RespondType: "JSON",
+    ExpireDate: "2026-08-15",
+    ExpireTime: "23:59:59",
+    BankCode: "004",
+    CodeNo: "TestAccount12345",
+    CardBank: null,
   },
 });
 
