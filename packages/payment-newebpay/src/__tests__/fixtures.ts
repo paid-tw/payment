@@ -94,6 +94,20 @@ export const QUERY_VACC_UNPAID_RESULT = {
   OrderStatus: 0,
 };
 
+/**
+ * The same real order AFTER 模擬觸發 paid it (recorded live 2026-08-08):
+ * TradeStatus 0→1, PayTime filled, FundTime gains the payout date, and the
+ * CheckCode is UNCHANGED (it covers only Amt/MerchantID/MerchantOrderNo/
+ * TradeNo, none of which move on payment).
+ */
+export const QUERY_VACC_PAID_RESULT = {
+  ...QUERY_VACC_UNPAID_RESULT,
+  TradeStatus: "1",
+  PayTime: "2026-08-08 04:41:47",
+  FundTime: "2026-08-15",
+  OrderStatus: 1,
+};
+
 /** Synthesized: TWQR order awaiting bank confirmation (OrderStatus 9 = 付款中). */
 export const QUERY_PENDING_RESULT = {
   MerchantID: "MS127874575",
@@ -183,18 +197,27 @@ export const GETCODE_VACC_JSON = JSON.stringify({
   },
 });
 
-/** Synthesized paid-VACC notify — the completion event of the ATM flow. */
+/**
+ * Paid-VACC notify — recorded live 2026-08-08 (會員專區 模擬觸發 on the real
+ * order above; merchant id swapped for the doc sandbox one). ⚠️ NewebPay marks
+ * simulation only in the Message TEXT (`模擬付款成功`) — there is no
+ * SimulatePaid-style flag, so the shape is otherwise identical to a real
+ * payment's.
+ */
 export const NOTIFY_VACC_PAID_JSON = JSON.stringify({
   Status: "SUCCESS",
-  Message: "付款成功",
+  Message: "模擬付款成功",
   Result: {
     MerchantID: "MS127874575",
-    Amt: 1200,
-    TradeNo: "26080112345678901",
-    MerchantOrderNo: "order_atm_001",
+    Amt: 30,
+    TradeNo: "26080804351759265",
+    MerchantOrderNo: "paidlive1786134867",
+    RespondType: "JSON",
+    IP: "107.216.42.6",
+    EscrowBank: "HNCB",
     PaymentType: "VACC",
-    PayTime: "2026-08-02 10:15:00",
-    PayBankCode: "012",
+    PayTime: "2026-08-08 04:41:47",
+    PayBankCode: "004",
     PayerAccount5Code: "12345",
   },
 });

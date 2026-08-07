@@ -64,6 +64,13 @@ Legend: ✅ implemented + tested · 🟡 partial / notes · ❌ not implemented 
   `PayInfo "(004)TestAccount12345"`). Recording deltas folded into fixtures:
   unpaid `PayTime` arrives as the ZERO-DATE `0000-00-00 00:00:00` (not empty),
   and the get-code `ExpireTime` arrives coloned (`23:59:59`), not `His`.
+  The order was then paid via 會員專區 模擬觸發: the paid notify arrived at
+  NotifyURL (verified — VACC extras PayBankCode/PayerAccount5Code present) and
+  the re-query showed TradeStatus 0→1 with FundTime populated and the
+  CheckCode unchanged (it signs only Amt/MerchantID/MerchantOrderNo/TradeNo).
+  ⚠️ NewebPay marks a simulated payment ONLY in the Message text
+  (`模擬付款成功`) — there is no SimulatePaid-style flag, so shipping decisions
+  must not rely on distinguishing simulated from real notifies by shape.
   ⚠️ The 1Password extension's inline card-save overlay steals browser-automation
   focus on the credit-card form — use VACC/WebATM flows for automated runs, or
   a profile without password-manager extensions for card runs.

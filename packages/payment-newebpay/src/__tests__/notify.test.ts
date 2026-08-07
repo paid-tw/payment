@@ -101,8 +101,8 @@ describe("verifyNewebpayPaymentNotify — JSON RespondType and failures", () => 
     const notify = verifyNewebpayPaymentNotify(notifyEnvelope(NOTIFY_VACC_PAID_JSON), CREDENTIALS);
     expect(notify.success).toBe(true);
     expect(notify.method).toBe("atm");
-    expect(notify.paidAt).toBe("2026-08-02 10:15:00");
-    expect(notify.atm).toMatchObject({ payBankCode: "012", payerAccount5Code: "12345" });
+    expect(notify.paidAt).toBe("2026-08-08 04:41:47");
+    expect(notify.atm).toMatchObject({ payBankCode: "004", payerAccount5Code: "12345" });
     expect(notify.card).toBeUndefined();
   });
 

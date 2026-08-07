@@ -25,6 +25,7 @@ import {
   QUERY_CREDIT_PAID_RESULT,
   QUERY_CREDIT_REFUNDED_RESULT,
   QUERY_PENDING_RESULT,
+  QUERY_VACC_PAID_RESULT,
   QUERY_VACC_UNPAID_RESULT,
 } from "./fixtures.js";
 
@@ -204,6 +205,18 @@ describe("NewebPay getPayment — success shapes", () => {
     expect(data.method).toBe("atm");
     expect(data.paidAt).toBeUndefined();
     expect((data.raw as Record<string, unknown>).PayInfo).toBe("(004)TestAccount12345");
+  });
+
+  it("normalizes the SAME order after payment (recorded 0→1 transition)", async () => {
+    server.use(http.post(QUERY_URL, () => HttpResponse.json(querySuccess(QUERY_VACC_PAID_RESULT))));
+    const data = await testProvider().getPayment({
+      merTradeNo: "paidlive1786134867",
+      amount: 30,
+    });
+    expect(data.status).toBe("paid");
+    expect(data.method).toBe("atm");
+    expect(data.paidAt).toBe("2026-08-08 04:41:47");
+    expect((data.raw as Record<string, unknown>).FundTime).toBe("2026-08-15");
   });
 
   it("maps OrderStatus 9 (付款中-待銀行確認) to pending", async () => {
