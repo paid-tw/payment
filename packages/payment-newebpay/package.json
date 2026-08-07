@@ -1,6 +1,6 @@
 {
   "name": "@paid-tw/payment-newebpay",
-  "version": "0.1.1",
+  "version": "0.2.0",
   "description": "NewebPay 藍新金流 adapter for @paid-tw/payment — MPG checkout, query, credit-card refund/capture/cancel, notify verification, and 定期定額 periodic mandates.",
   "keywords": [
     "newebpay",
