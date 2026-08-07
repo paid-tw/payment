@@ -20,7 +20,7 @@
 | [`@paid-tw/payment`](./packages/payment)                   | core：型別、`PaymentProvider`、capabilities、`PaymentError`、`MockProvider` |
 | [`@paid-tw/payment-ecpay`](./packages/payment-ecpay)       | ECPay 綠界 — 四條產品線、四個 factory（見下）                               |
 | [`@paid-tw/payment-payuni`](./packages/payment-payuni)     | PAYUNi 統一金流 — 目前只有 trade query；create / refund 會丟 `UNSUPPORTED`  |
-| [`@paid-tw/payment-newebpay`](./packages/payment-newebpay) | NewebPay 藍新 — scaffold                                                    |
+| [`@paid-tw/payment-newebpay`](./packages/payment-newebpay) | NewebPay 藍新 — MPG 幕前支付 + 信用卡定期定額，兩個 factory（見下）         |
 | [`@paid-tw/payment-zingala`](./packages/payment-zingala)   | 中租零卡分期 — 無卡分期（BNPL）：核貸流程，另一組介面（見下）               |
 
 只需安裝你會用到的供應商。**core 永不依賴 adapters**；由 CLI / app compose。
@@ -69,6 +69,19 @@ const data = await payments.getPayment({ merTradeNo: "ORDER123" });
 - 覆蓋矩陣：[`docs/ecpay-api-coverage.md`](./docs/ecpay-api-coverage.md)
 - 為什麼分成四個 factory：[`docs/ecpay-provider-separation.md`](./docs/ecpay-provider-separation.md)
 
+## 藍新：兩條產品線，一個套件
+
+藍新照綠界的前例拆 factory：MPG 幕前支付與信用卡定期定額共用商店金鑰，但端點、加密信封（MPG 有 TradeSha，定期定額**沒有**——解密成功就是唯一的完整性檢查）、回應形狀、錯誤碼表都不同：
+
+| Factory                        | 產品線               | create 結果                           |
+| ------------------------------ | -------------------- | ------------------------------------- |
+| `createNewebpayProvider`       | MPG 幕前支付（導轉） | redirect form（僅限瀏覽器 form post） |
+| `createNewebpayPeriodProvider` | 信用卡定期定額       | redirect form（藍新代管刷卡頁）       |
+
+定期定額不經手卡號，所以兩個 factory 都在套件根目錄（不像綠界 backauth 需要 subpath）。每期扣款的退款走 MPG factory 的 `refundPayment`，用 N050 通知裡的該期 `TradeNo`。
+
+- 覆蓋矩陣與實測記錄：[`docs/newebpay-api-coverage.md`](./docs/newebpay-api-coverage.md)
+
 ## BNPL：另一種形狀
 
 `@paid-tw/payment-zingala`（中租零卡分期）不實作 `PaymentProvider`，因為它的流程不一樣：刷卡是當下授權，無卡分期是**核貸**——送出申請後有審核、可能婉拒，核准後還要等撥款。`status` 只有 paid / unpaid 的話，「審核中」和「已核准未撥款」沒地方放。
@@ -99,6 +112,8 @@ pnpm test:live:ecpay:backauth  # 幕後授權
 pnpm test:live:ecpay:credit    # 信用卡查詢
 pnpm test:live:ecpay:period    # 定期定額 ⚠️ 會真的扣款，見套件 README
 pnpm test:live:zingala         # 中租零卡分期 UAT
+pnpm test:live:newebpay        # 藍新 MPG ⚠️ 每次消耗一次查無交易額度（TRA10071 四小時鎖）
+pnpm test:live:newebpay:period # 藍新定期定額
 ```
 
 憑證命名見 [`.env.example`](./.env.example)。⚠️ 這個 repo 沒有 dotenv，`.env` 放了不會自動生效 —— 用 `set -a; source .env; set +a`。
