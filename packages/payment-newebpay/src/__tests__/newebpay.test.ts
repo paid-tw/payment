@@ -13,13 +13,17 @@ import {
   parseEnvelopeRequest,
   QUERY_URL,
   querySuccess,
+  responseCheckCode,
   server,
   testProvider,
 } from "./server.js";
 import {
   CANCEL_AUTH_RESULT,
   CLOSE_REFUND_RESULT,
+  QUERY_CREDIT_CANCELED_RESULT,
+  QUERY_CREDIT_FAILED_RESULT,
   QUERY_CREDIT_PAID_RESULT,
+  QUERY_CREDIT_REFUNDED_RESULT,
   QUERY_PENDING_RESULT,
   QUERY_VACC_UNPAID_RESULT,
 } from "./fixtures.js";
@@ -157,10 +161,17 @@ describe("NewebPay createPayment — validation (no network)", () => {
       { LangType: "en" }, // has a typed option
       { EncryptType: 1 }, // AES-GCM unsupported
       { ["__proto__"]: "x" } as Record<string, string>, // object-internal name
+      { InstFlag: Number.NaN }, // non-finite value
     ]) {
       const err = await reject({ ...CREATE_INPUT, params });
       expect(err.code).toBe("VALIDATION");
     }
+  });
+
+  it("rejects a non-positive or non-finite amount and an over-long ItemDesc", async () => {
+    expect((await reject({ ...CREATE_INPUT, amount: 0 })).code).toBe("VALIDATION");
+    expect((await reject({ ...CREATE_INPUT, amount: Number.NaN })).code).toBe("VALIDATION");
+    expect((await reject({ ...CREATE_INPUT, itemDesc: "字".repeat(51) })).code).toBe("VALIDATION");
   });
 });
 
@@ -200,6 +211,23 @@ describe("NewebPay getPayment — success shapes", () => {
     const data = await testProvider().getPayment({ merTradeNo: "order_twqr_001", amount: 500 });
     expect(data.status).toBe("pending");
     expect(data.method).toBe("twqr");
+  });
+
+  it("maps TradeStatus 2/3/6 to failed/canceled/refunded and passes unknown through", async () => {
+    const cases = [
+      { fixture: QUERY_CREDIT_FAILED_RESULT, status: "failed" },
+      { fixture: QUERY_CREDIT_CANCELED_RESULT, status: "canceled" },
+      { fixture: QUERY_CREDIT_REFUNDED_RESULT, status: "refunded" },
+      { fixture: { ...QUERY_CREDIT_PAID_RESULT, TradeStatus: "8" }, status: "8" },
+    ];
+    for (const { fixture, status } of cases) {
+      server.use(http.post(QUERY_URL, () => HttpResponse.json(querySuccess(fixture))));
+      const data = await testProvider().getPayment({
+        merTradeNo: String(fixture.MerchantOrderNo),
+        amount: 30,
+      });
+      expect(data.status).toBe(status);
+    }
   });
 });
 
@@ -256,14 +284,19 @@ describe("NewebPay getPayment — integrity + error mapping", () => {
     expect((err as PaymentError).code).toBe("AUTH");
   });
 
-  it("maps TRA10021 (查無交易) to NOT_FOUND, preserving the raw code", async () => {
-    server.use(http.post(QUERY_URL, () => HttpResponse.json(gatewayError("TRA10021"))));
+  it("maps TRA10021 (查無交易) to NOT_FOUND, preserving the gateway's own message", async () => {
+    // Shape + message as recorded live 2026-08-07: {"Status":"TRA10021",
+    // "Message":"查無交易資料","Result":[]}.
+    server.use(
+      http.post(QUERY_URL, () => HttpResponse.json(gatewayError("TRA10021", "查無交易資料"))),
+    );
     const err = await testProvider()
       .getPayment({ merTradeNo: "NOPE1", amount: 1 })
       .catch((e) => e);
     expect(isPaymentError(err)).toBe(true);
     expect((err as PaymentError).code).toBe("NOT_FOUND");
     expect((err as PaymentError).rawCode).toBe("TRA10021");
+    expect((err as PaymentError).rawMessage).toBe("查無交易資料");
     expect((err as PaymentError).message).toContain("查無該筆交易");
   });
 
@@ -440,6 +473,38 @@ describe("NewebPay refund / capture / cancel (CreditCard Close + Cancel)", () =>
     expect(result.status).toBe("TRA20001");
   });
 
+  it("maps the recorded cancel error envelope (Result object, CheckCode over empty ids)", async () => {
+    // Field-exact with the live recording 2026-08-07: an error Status arrives
+    // WITH a Result object whose CheckCode is computed over the empty
+    // MerchantOrderNo/TradeNo strings — must throw NOT_FOUND, never resolve.
+    server.use(
+      http.post(CANCEL_URL, () =>
+        HttpResponse.json({
+          Status: "TRA10021",
+          Message: "查無該筆交易或該筆交易不為信用卡交易，請查明",
+          Result: {
+            MerchantID: MERCHANT,
+            Amt: 30,
+            MerchantOrderNo: "",
+            TradeNo: "",
+            CheckCode: responseCheckCode({
+              Amt: 30,
+              MerchantID: MERCHANT,
+              MerchantOrderNo: "",
+              TradeNo: "",
+            }),
+          },
+        }),
+      ),
+    );
+    const err = await testProvider()
+      .cancelAuthorization({ orderId: "nope1", amount: 30 })
+      .catch((e) => e);
+    expect(isPaymentError(err)).toBe(true);
+    expect((err as PaymentError).code).toBe("NOT_FOUND");
+    expect((err as PaymentError).rawCode).toBe("TRA10021");
+  });
+
   it("rejects a tampered cancelAuthorization CheckCode with AUTH", async () => {
     server.use(
       http.post(CANCEL_URL, () =>
@@ -457,6 +522,20 @@ describe("NewebPay refund / capture / cancel (CreditCard Close + Cancel)", () =>
       .capturePayment({ amount: 30 })
       .catch((e) => e);
     expect((err as PaymentError).code).toBe("VALIDATION");
+  });
+
+  it("every credit action rejects a non-finite amount locally (no network)", async () => {
+    const provider = testProvider();
+    for (const call of [
+      () => provider.capturePayment({ orderId: "o1", amount: Number.NaN }),
+      () => provider.cancelCapture({ orderId: "o1", amount: Number.NaN }),
+      () => provider.cancelRefund({ orderId: "o1", amount: Number.NaN }),
+      () => provider.cancelAuthorization({ orderId: "o1", amount: Number.NaN }),
+      () => provider.cancelAuthorization({ orderId: "o1", amount: undefined as never }),
+    ]) {
+      const err = await call().catch((e) => e);
+      expect((err as PaymentError).code).toBe("VALIDATION");
+    }
   });
 });
 

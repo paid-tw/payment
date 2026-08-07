@@ -89,6 +89,11 @@ describe("period createPayment — mandate checkout form (no network)", () => {
     expect((await reject({ currency: "USD" })).code).toBe("VALIDATION");
     expect((await reject({ method: "atm" as never })).code).toBe("VALIDATION");
     expect((await reject({ prodDesc: "" })).code).toBe("VALIDATION");
+    // notifyUrl is adapter-required: it is the only programmatic delivery of
+    // PeriodNo, without which the mandate can never be altered or terminated.
+    expect((await reject({ notifyUrl: undefined })).code).toBe("VALIDATION");
+    expect((await reject({ startType: 4 as never })).code).toBe("VALIDATION");
+    expect((await reject({ periodType: "X" as never })).code).toBe("VALIDATION");
     expect((await reject({ payerEmail: "" })).code).toBe("VALIDATION");
     expect((await reject({ amount: 0 })).code).toBe("VALIDATION");
     expect((await reject({ periodTimes: 0 })).code).toBe("VALIDATION");
@@ -202,6 +207,16 @@ describe("period alterStatus [NPA-B051]", () => {
       .alterStatus({ orderId: "o1", periodNo: "P1", alterType: "suspend" })
       .catch((e) => e);
     expect((err as PaymentError).code).toBe("NETWORK");
+  });
+
+  it("wraps a non-JSON alter response as PROVIDER with the raw body preserved", async () => {
+    server.use(http.post(ALTER_STATUS_URL, () => new HttpResponse("<html>maintenance</html>")));
+    const err = await testPeriodProvider()
+      .alterStatus({ orderId: "o1", periodNo: "P1", alterType: "suspend" })
+      .catch((e) => e);
+    expect((err as PaymentError).code).toBe("PROVIDER");
+    expect((err as PaymentError).message).toContain("不是 JSON");
+    expect((err as PaymentError).raw).toBe("<html>maintenance</html>");
   });
 });
 
@@ -323,6 +338,32 @@ describe("period notify verification", () => {
     const err = (() => {
       try {
         testPeriodProvider().verifyPeriodCycleNotify({ Status: "SUCCESS" });
+      } catch (e) {
+        return e;
+      }
+      throw new Error("expected the verifier to throw");
+    })();
+    expect((err as PaymentError).code).toBe("AUTH");
+  });
+
+  it("rejects a MerchantID mismatch with VALIDATION and missing creds with AUTH", () => {
+    let err = (() => {
+      try {
+        testPeriodProvider({ merchantId: "MS999999999" }).verifyPeriodCreateNotify({
+          Period: MANUAL_CREATE_RESULT_HEX,
+        });
+      } catch (e) {
+        return e;
+      }
+      throw new Error("expected the verifier to throw");
+    })();
+    expect((err as PaymentError).code).toBe("VALIDATION");
+
+    err = (() => {
+      try {
+        testPeriodProvider({ hashKey: "", hashIv: "" }).verifyPeriodCreateNotify({
+          Period: MANUAL_CREATE_RESULT_HEX,
+        });
       } catch (e) {
         return e;
       }

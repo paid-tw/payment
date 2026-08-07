@@ -324,6 +324,13 @@ export function createNewebpayProvider(config: NewebpayProviderConfig): Newebpay
     ): Promise<NewebpayCancelAuthorizationResult> {
       const { merchantId, hashKey, hashIv } = requireCredentials(config);
       const index = resolveIndex(input);
+      if (typeof input.amount !== "number" || !Number.isFinite(input.amount)) {
+        throw new PaymentError(
+          "VALIDATION",
+          "NewebPay 取消授權需要金額 amount（需與授權金額相同）",
+          "newebpay",
+        );
+      }
       const inner: Record<string, string | number | undefined> = {
         RespondType: "JSON",
         Version: "1.0",

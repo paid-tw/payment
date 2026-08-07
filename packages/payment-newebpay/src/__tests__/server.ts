@@ -81,9 +81,13 @@ export function actionSuccess(
   };
 }
 
-/** An error envelope (Status = a NewebPay code, e.g. TRA10021). */
+/**
+ * An error envelope (Status = a NewebPay code, e.g. TRA10021). Mirrors the
+ * shape recorded live 2026-08-07: query errors carry `Result` as an EMPTY
+ * ARRAY plus the gateway's own message text.
+ */
 export function gatewayError(status: string, message = "") {
-  return { Status: status, Message: message };
+  return { Status: status, Message: message, Result: [] };
 }
 
 /**

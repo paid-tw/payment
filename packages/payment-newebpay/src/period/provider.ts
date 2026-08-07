@@ -42,6 +42,11 @@ export type NewebpayPeriodAlterType = "suspend" | "terminate" | "restart";
  * PeriodAmt (the PER-period charge), `itemDesc`/`prodDesc` → ProdDesc,
  * `notifyUrl`/`returnUrl` → the mandate URLs. `method` must be `"card"` —
  * the periodic line only charges credit cards.
+ *
+ * `notifyUrl` is REQUIRED by this adapter (the gateway would accept its
+ * absence, but the create result is the only programmatic delivery of
+ * PeriodNo and there is no query API — without it the mandate cannot be
+ * suspended, terminated, or altered through the SDK).
  */
 export interface NewebpayPeriodCreateInput extends CreatePaymentRequest {
   /** ProdDesc — Chinese/English/digits/spaces/underscore only. Falls back to itemDesc. */
@@ -448,6 +453,17 @@ function validateCreateInput(input: NewebpayPeriodCreateInput): void {
     throw new PaymentError(
       "VALIDATION",
       "NewebPay 定期定額需要 payerEmail（付款人電子信箱）",
+      "newebpay-period",
+    );
+  }
+  // The gateway accepts an empty NotifyURL, but the create result is the ONLY
+  // programmatic delivery of PeriodNo, and this line has no query API — a
+  // mandate created without it keeps charging while alterStatus/alterAmount
+  // (both need PeriodNo) are permanently unusable for it.
+  if (!input.notifyUrl) {
+    throw new PaymentError(
+      "VALIDATION",
+      "NewebPay 定期定額需要 notify-url：NotifyURL 是取得 PeriodNo（委託單號）與每期授權結果的唯一程式化管道，未設定將無法暫停/終止/修改委託",
       "newebpay-period",
     );
   }

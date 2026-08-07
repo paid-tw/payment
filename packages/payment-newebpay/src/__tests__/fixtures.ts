@@ -39,6 +39,41 @@ export const QUERY_CREDIT_PAID_RESULT = {
   AuthBank: "KGI",
 };
 
+/**
+ * Synthesized money-state variants of the paid fixture, per the credit-card
+ * state machine (§3/圖5): declined, voided (取消授權), and fully refunded.
+ */
+export const QUERY_CREDIT_FAILED_RESULT = {
+  ...QUERY_CREDIT_PAID_RESULT,
+  MerchantOrderNo: "order_declined_001",
+  TradeNo: "23092714215835072",
+  TradeStatus: "2",
+  PayTime: "",
+  RespondCode: "05",
+  Auth: "",
+  RespondMsg: "授權失敗",
+  BackBalance: "0",
+};
+
+export const QUERY_CREDIT_CANCELED_RESULT = {
+  ...QUERY_CREDIT_PAID_RESULT,
+  MerchantOrderNo: "order_voided_001",
+  TradeNo: "23092714215835073",
+  TradeStatus: "3",
+  BackBalance: "0",
+};
+
+export const QUERY_CREDIT_REFUNDED_RESULT = {
+  ...QUERY_CREDIT_PAID_RESULT,
+  MerchantOrderNo: "order_refunded_001",
+  TradeNo: "23092714215835074",
+  TradeStatus: "6",
+  CloseStatus: "3",
+  CloseAmt: "30",
+  BackStatus: "3",
+  BackBalance: "0",
+};
+
 /** Synthesized: unpaid ATM order with an issued virtual account (取號完成). */
 export const QUERY_VACC_UNPAID_RESULT = {
   MerchantID: "MS127874575",
@@ -134,6 +169,41 @@ export const GETCODE_VACC_JSON = JSON.stringify({
     ExpireTime: "235959",
     BankCode: "031",
     CodeNo: "1234567890123",
+  },
+});
+
+/** Synthesized paid-VACC notify — the completion event of the ATM flow. */
+export const NOTIFY_VACC_PAID_JSON = JSON.stringify({
+  Status: "SUCCESS",
+  Message: "付款成功",
+  Result: {
+    MerchantID: "MS127874575",
+    Amt: 1200,
+    TradeNo: "26080112345678901",
+    MerchantOrderNo: "order_atm_001",
+    PaymentType: "VACC",
+    PayTime: "2026-08-02 10:15:00",
+    PayBankCode: "012",
+    PayerAccount5Code: "12345",
+  },
+});
+
+/** Synthesized paid-barcode notify (three Code39 segments + paying chain). */
+export const NOTIFY_BARCODE_PAID_JSON = JSON.stringify({
+  Status: "SUCCESS",
+  Message: "付款成功",
+  Result: {
+    MerchantID: "MS127874575",
+    Amt: 700,
+    TradeNo: "26080134567890123",
+    MerchantOrderNo: "order_barcode_001",
+    PaymentType: "BARCODE",
+    PayTime: "2026-08-03 18:00:00",
+    Barcode_1: "150808A3",
+    Barcode_2: "3453011122223333",
+    Barcode_3: "060517000000700",
+    RepayTimes: 1,
+    PayStore: "SEVEN",
   },
 });
 

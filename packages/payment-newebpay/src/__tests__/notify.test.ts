@@ -11,9 +11,11 @@ import {
   GETCODE_VACC_JSON,
   MANUAL_NOTIFY_TRADEINFO,
   MANUAL_NOTIFY_TRADESHA,
+  NOTIFY_BARCODE_PAID_JSON,
   NOTIFY_CREDIT_DECLINED_JSON,
   NOTIFY_CREDIT_PAID_JSON,
   NOTIFY_CVS_PAID_JSON,
+  NOTIFY_VACC_PAID_JSON,
 } from "./fixtures.js";
 
 const CREDENTIALS: NewebpayNotifyCredentials = {
@@ -95,6 +97,47 @@ describe("verifyNewebpayPaymentNotify — JSON RespondType and failures", () => 
     expect(notify.cvs).toMatchObject({ codeNo: "GW26080100001234", storeId: "990088" });
   });
 
+  it("surfaces paid-VACC extras (payer bank/account) — the ATM completion event", () => {
+    const notify = verifyNewebpayPaymentNotify(notifyEnvelope(NOTIFY_VACC_PAID_JSON), CREDENTIALS);
+    expect(notify.success).toBe(true);
+    expect(notify.method).toBe("atm");
+    expect(notify.paidAt).toBe("2026-08-02 10:15:00");
+    expect(notify.atm).toMatchObject({ payBankCode: "012", payerAccount5Code: "12345" });
+    expect(notify.card).toBeUndefined();
+  });
+
+  it("surfaces paid-barcode extras (three segments + paying chain)", () => {
+    const notify = verifyNewebpayPaymentNotify(
+      notifyEnvelope(NOTIFY_BARCODE_PAID_JSON),
+      CREDENTIALS,
+    );
+    expect(notify.method).toBe("barcode");
+    expect(notify.barcode).toMatchObject({
+      barcode1: "150808A3",
+      barcode2: "3453011122223333",
+      barcode3: "060517000000700",
+      payStore: "SEVEN",
+    });
+  });
+
+  it("a get-code SUCCESS envelope through the PAYMENT verifier has no paidAt", () => {
+    // 取號完成 ≠ paid: same envelope, but the get-code payload has
+    // ExpireDate/ExpireTime and no PayTime — paidAt undefined is the only
+    // field-level distinction, so pin it.
+    const notify = verifyNewebpayPaymentNotify(notifyEnvelope(GETCODE_VACC_JSON), CREDENTIALS);
+    expect(notify.success).toBe(true);
+    expect(notify.method).toBe("atm");
+    expect(notify.paidAt).toBeUndefined();
+  });
+
+  it("accepts a JSON payload whose Result is a one-element array", () => {
+    const payload = JSON.parse(NOTIFY_CREDIT_PAID_JSON) as { Result: unknown };
+    const wrapped = JSON.stringify({ ...payload, Result: [payload.Result] });
+    const notify = verifyNewebpayPaymentNotify(notifyEnvelope(wrapped), CREDENTIALS);
+    expect(notify.success).toBe(true);
+    expect(notify.merTradeNo).toBe("Vanespl_ec_1695795668");
+  });
+
   it("rejects a tampered TradeSha with AUTH before decrypting", () => {
     const envelope = notifyEnvelope(NOTIFY_CREDIT_PAID_JSON, { TradeSha: "0".repeat(64) });
     const err = capture(() => verifyNewebpayPaymentNotify(envelope, CREDENTIALS));
@@ -141,6 +184,39 @@ describe("verifyNewebpayPaymentNotify — JSON RespondType and failures", () => 
       ),
     );
     expect(err.code).toBe("UNSUPPORTED");
+  });
+
+  it("rejects missing HashKey/HashIV with AUTH before touching the body", () => {
+    const err = capture(() =>
+      verifyNewebpayPaymentNotify(notifyEnvelope(NOTIFY_CREDIT_PAID_JSON), {
+        hashKey: "",
+        hashIv: "",
+      }),
+    );
+    expect(err.code).toBe("AUTH");
+  });
+
+  it("rejects a payload without MerchantOrderNo with VALIDATION", () => {
+    const payload = JSON.parse(NOTIFY_CREDIT_PAID_JSON) as {
+      Result: Record<string, unknown>;
+    };
+    delete payload.Result.MerchantOrderNo;
+    const err = capture(() =>
+      verifyNewebpayPaymentNotify(notifyEnvelope(JSON.stringify(payload)), CREDENTIALS),
+    );
+    expect(err.code).toBe("VALIDATION");
+  });
+
+  it("falls back to the envelope MerchantID when the decrypted Result omits it", () => {
+    const payload = JSON.parse(NOTIFY_CREDIT_PAID_JSON) as {
+      Result: Record<string, unknown>;
+    };
+    delete payload.Result.MerchantID;
+    const notify = verifyNewebpayPaymentNotify(
+      notifyEnvelope(JSON.stringify(payload)),
+      CREDENTIALS,
+    );
+    expect(notify.merchantId).toBe(MERCHANT);
   });
 });
 
