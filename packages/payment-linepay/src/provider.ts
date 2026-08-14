@@ -384,9 +384,7 @@ export function createLinepayProvider(config: LinepayProviderConfig): LinepayPro
       return { raw: body };
     },
 
-    async checkPaymentRequestStatus(input: {
-      transactionId: string;
-    }): Promise<LinepayCheckResult> {
+    async checkPaymentRequestStatus(input: { transactionId: string }): Promise<LinepayCheckResult> {
       const transactionId = assertTransactionId(input.transactionId, "check");
       const body = await callApi("GET", LINEPAY_PATHS.check(transactionId), {}, "check");
       const returnCode = body.returnCode ?? "";
@@ -544,11 +542,7 @@ const CHECK_STATUSES: Record<string, LinepayCheckResult["status"]> = {
 function requireCredentials(config: LinepayProviderConfig) {
   const { channelId, channelSecret } = config;
   if (!channelId || !channelSecret) {
-    throw new PaymentError(
-      "AUTH",
-      "缺少 LINE Pay 憑證（Channel ID / Channel Secret）",
-      "linepay",
-    );
+    throw new PaymentError("AUTH", "缺少 LINE Pay 憑證（Channel ID / Channel Secret）", "linepay");
   }
   return { channelId, channelSecret };
 }
@@ -570,11 +564,7 @@ function assertAmount(amount: number, currency: string, field: string): number {
     throw new PaymentError("VALIDATION", `LINE Pay ${field} 需為正數`, "linepay");
   }
   if (currency === "TWD" && !Number.isInteger(amount)) {
-    throw new PaymentError(
-      "VALIDATION",
-      `LINE Pay TWD 金額需為整數（收到 ${amount}）`,
-      "linepay",
-    );
+    throw new PaymentError("VALIDATION", `LINE Pay TWD 金額需為整數（收到 ${amount}）`, "linepay");
   }
   return amount;
 }

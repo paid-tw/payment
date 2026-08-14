@@ -15,8 +15,7 @@ export const CHANNEL_SECRET = "86b0f1e29a2c4d5f8e7a6b5c4d3e2f1a";
 
 export const REQUEST_URL = `${BASE}/v4/payments/request`;
 export const DETAILS_URL = `${BASE}/v4/payments`;
-export const confirmUrl = (transactionId: string) =>
-  `${BASE}/v4/payments/${transactionId}/confirm`;
+export const confirmUrl = (transactionId: string) => `${BASE}/v4/payments/${transactionId}/confirm`;
 export const refundUrl = (transactionId: string) => `${BASE}/v4/payments/${transactionId}/refund`;
 export const captureUrl = (transactionId: string) =>
   `${BASE}/v4/payments/authorizations/${transactionId}/capture`;

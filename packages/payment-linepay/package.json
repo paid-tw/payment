@@ -3,8 +3,8 @@
   "version": "0.0.0",
   "description": "LINE Pay adapter for @paid-tw/payment — Online API v4: request/confirm checkout, capture/void, refund, payment details, and request-status polling.",
   "keywords": [
-    "linepay",
     "line-pay",
+    "linepay",
     "payment",
     "taiwan",
     "金流"
