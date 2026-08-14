@@ -38,7 +38,7 @@ PAYUNI_LIVE=1 PAYUNI_MERCHANT_ID=... pnpm vitest run packages/payment-payuni/src
 ## Architecture
 
 - `packages/payment` (`@paid-tw/payment`) — core: `PaymentProvider` interface, request/response types, `Capability` set + `supports`/`assertSupports`, `PaymentError`, `MockProvider`. **Core never depends on adapters**; composition happens in the CLI/app.
-- `packages/payment-ecpay`, `payment-payuni`, `payment-newebpay`, `payment-linepay` — one adapter package per vendor, each exporting a factory (`createEcpayProvider(config) => PaymentProvider`).
+- `packages/payment-ecpay`, `packages/payment-payuni`, `packages/payment-newebpay`, `packages/payment-linepay` — one adapter package per vendor, each exporting a factory (`createEcpayProvider(config) => PaymentProvider`).
 
 Contract rules that shape all adapter code:
 
