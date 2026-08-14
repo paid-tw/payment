@@ -26,6 +26,7 @@
     "test:live:zingala": "ZINGALA_LIVE=1 vitest run packages/payment-zingala/src/__tests__/zingala-live.test.ts",
     "test:live:newebpay": "NEWEBPAY_LIVE=1 vitest run packages/payment-newebpay/src/__tests__/live.test.ts",
     "test:live:newebpay:period": "NEWEBPAY_LIVE=1 vitest run packages/payment-newebpay/src/period/__tests__/period-live.test.ts",
+    "test:live:linepay": "LINEPAY_LIVE=1 vitest run packages/payment-linepay/src/__tests__/live.test.ts",
     "capture:ecpay-notify": "unrun scripts/ecpay-notify-capture.mjs",
     "lint": "oxlint --type-aware",
     "format": "oxfmt --write",

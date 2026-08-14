@@ -21,6 +21,7 @@
 | [`@paid-tw/payment-ecpay`](./packages/payment-ecpay)       | ECPay 綠界 — 四條產品線、四個 factory（見下）                               |
 | [`@paid-tw/payment-payuni`](./packages/payment-payuni)     | PAYUNi 統一金流 — 目前只有 trade query；create / refund 會丟 `UNSUPPORTED`  |
 | [`@paid-tw/payment-newebpay`](./packages/payment-newebpay) | NewebPay 藍新 — MPG 幕前支付 + 信用卡定期定額，兩個 factory（見下）         |
+| [`@paid-tw/payment-linepay`](./packages/payment-linepay)   | LINE Pay — Online API v4：request → redirect → confirm，無背景通知（見下）  |
 | [`@paid-tw/payment-zingala`](./packages/payment-zingala)   | 中租零卡分期 — 無卡分期（BNPL）：核貸流程，另一組介面（見下）               |
 
 只需安裝你會用到的供應商。**core 永不依賴 adapters**；由 CLI / app compose。
@@ -82,6 +83,17 @@ const data = await payments.getPayment({ merTradeNo: "ORDER123" });
 
 - 覆蓋矩陣與實測記錄：[`docs/newebpay-api-coverage.md`](./docs/newebpay-api-coverage.md)
 
+## LINE Pay：沒有背景通知的三段流程
+
+LINE Pay（Online API v4）**沒有 NotifyURL**：`createPayment` 只建立付款請求並回傳 `paymentUrl`，買家在 LINE 完成認證後被導回你的 `confirmUrl`，由你的伺服器呼叫 `confirmPayment` 才真正完成扣款 —— 導回本身不代表付款成功。不用導回的話也可以輪詢 `checkPaymentRequestStatus`。
+
+兩個實作上的坑（都已在 adapter 內處理）：
+
+- `transactionId` 是最長 19 位數的 JSON **number**，超過 `Number.MAX_SAFE_INTEGER`——直接 `JSON.parse` 會默默捨去尾數、變成另一筆交易的 ID。adapter 解析前先把 ID 欄位加上引號，全程以字串傳遞。
+- 未 confirm 的交易在查詢付款明細裡**查不到**（回 1150，與不存在的交易相同）；pending 狀態要走 check API。
+
+- 覆蓋矩陣與實測記錄：[`docs/linepay-api-coverage.md`](./docs/linepay-api-coverage.md)
+
 ## BNPL：另一種形狀
 
 `@paid-tw/payment-zingala`（中租零卡分期）不實作 `PaymentProvider`，因為它的流程不一樣：刷卡是當下授權，無卡分期是**核貸**——送出申請後有審核、可能婉拒，核准後還要等撥款。`status` 只有 paid / unpaid 的話，「審核中」和「已核准未撥款」沒地方放。
@@ -114,6 +126,7 @@ pnpm test:live:ecpay:period    # 定期定額 ⚠️ 會真的扣款，見套件
 pnpm test:live:zingala         # 中租零卡分期 UAT
 pnpm test:live:newebpay        # 藍新 MPG ⚠️ 每次消耗一次查無交易額度（TRA10071 四小時鎖）
 pnpm test:live:newebpay:period # 藍新定期定額
+pnpm test:live:linepay         # LINE Pay sandbox（只建立請求，不會扣款）
 ```
 
 憑證命名見 [`.env.example`](./.env.example)。⚠️ 這個 repo 沒有 dotenv，`.env` 放了不會自動生效 —— 用 `set -a; source .env; set +a`。
