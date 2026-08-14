@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## What this is
 
-`payment-tw` — a unified Taiwan payment SDK. One provider-agnostic `PaymentProvider` interface with per-gateway adapter packages (ECPay, PAYUNi, NewebPay). pnpm workspace monorepo mirroring the shape of `@paid-tw/einvoice`.
+`payment-tw` — a unified Taiwan payment SDK. One provider-agnostic `PaymentProvider` interface with per-gateway adapter packages (ECPay, PAYUNi, NewebPay, LINE Pay). pnpm workspace monorepo mirroring the shape of `@paid-tw/einvoice`.
 
 ## Commands
 
@@ -38,7 +38,7 @@ PAYUNI_LIVE=1 PAYUNI_MERCHANT_ID=... pnpm vitest run packages/payment-payuni/src
 ## Architecture
 
 - `packages/payment` (`@paid-tw/payment`) — core: `PaymentProvider` interface, request/response types, `Capability` set + `supports`/`assertSupports`, `PaymentError`, `MockProvider`. **Core never depends on adapters**; composition happens in the CLI/app.
-- `packages/payment-ecpay`, `payment-payuni`, `payment-newebpay` — one adapter package per vendor, each exporting a factory (`createEcpayProvider(config) => PaymentProvider`).
+- `packages/payment-ecpay`, `packages/payment-payuni`, `packages/payment-newebpay`, `packages/payment-linepay` — one adapter package per vendor, each exporting a factory (`createEcpayProvider(config) => PaymentProvider`).
 
 Contract rules that shape all adapter code:
 
