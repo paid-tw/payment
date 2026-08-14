@@ -6,35 +6,39 @@
  * point of the precision tests is that the adapter must survive parsing the
  * exact bytes the gateway sends. `HttpResponse.json()` would round them at
  * fixture-definition time.
+ *
+ * Provenance: `request`/`check`/1150/2101 recorded live against the sandbox
+ * 2026-08-13 (LINEPAY_LIVE=1 + PAID_DEBUG=1). `confirm`/`refund`/`details`
+ * successes are synthesized from the v4 doc examples — recording them needs
+ * a human approving the payment in the sandbox wallet.
  */
-
-/** The canonical 19-digit id used across fixtures — one digit past 2^53 precision. */
-export const TX_ID = "2023042201206549310";
-/** What JSON.parse would round TX_ID to — asserted against, must never appear. */
-export const TX_ID_ROUNDED = "2023042201206549200";
 
 /**
- * 付款請求 success. Synthesized from the request-payment doc example
- * (developers-pay.line.me/zh/online-api-v4/request-payment, fetched
- * 2026-08-13) — re-record with LINEPAY_LIVE=1 + PAID_DEBUG=1.
+ * A live sandbox transactionId (recorded 2026-08-13). One digit past float64
+ * precision: JSON.parse rounds it to {@link TX_ID_ROUNDED}.
  */
-export const REQUEST_SUCCESS_JSON = `{
-  "returnCode": "0000",
-  "returnMessage": "Success.",
-  "info": {
-    "paymentUrl": {
-      "web": "https://sandbox-web-pay.line.me/web/payment/wait?transactionReserveId=REPLACEME",
-      "app": "line://pay/payment/REPLACEME"
-    },
-    "transactionId": ${TX_ID},
-    "paymentAccessToken": "056579816895"
-  }
-}`;
+export const TX_ID = "2026081402375151710";
+/** What JSON.parse would round TX_ID to — asserted against, must never appear. */
+export const TX_ID_ROUNDED = "2026081402375151600";
+
+/** 付款請求 success — recorded live 2026-08-13, transactionId → {@link TX_ID}. */
+export const REQUEST_SUCCESS_JSON = `{"returnCode":"0000","returnMessage":"Success.","info":{"paymentUrl":{"web":"https://sandbox-web-pay.line.me/web/payment/wait?transactionReserveId=YTVUcm0xaWpYTjhva20wV2NJOXE3UU8vUzVFQ2s3OC9mamY3V3pTNEF5R00zWGJ1RUJGbHpaT0RCTzF4YkgyRA","app":"line://pay/payment/YTVUcm0xaWpYTjhva20wV2NJOXE3UU8vUzVFQ2s3OC9mamY3V3pTNEF5R00zWGJ1RUJGbHpaT0RCTzF4YkgyRA"},"transactionId":${TX_ID},"paymentAccessToken":"179097132890"}}`;
+
+/**
+ * 查詢付款請求狀態 while the buyer hasn't authenticated — recorded live
+ * 2026-08-13. No `info` field; the returnCode IS the status.
+ */
+export const CHECK_PENDING_JSON = `{"returnCode":"0000","returnMessage":"reserved transaction."}`;
+
+/**
+ * 查無交易 — recorded live 2026-08-13. Unknown ids AND not-yet-confirmed
+ * transactions both answer this coded error (not an empty list).
+ */
+export const DETAILS_NOT_FOUND_JSON = `{"returnCode":"1150","returnMessage":"Transaction record not found."}`;
 
 /**
  * 付款授權 (confirm) success — doc example shape (split card + points pay).
- * Synthesized; confirm cannot be recorded headlessly (needs a human to
- * approve in the sandbox wallet).
+ * Synthesized; confirm cannot be recorded headlessly.
  */
 export const CONFIRM_SUCCESS_JSON = `{
   "returnCode": "0000",
@@ -50,21 +54,22 @@ export const CONFIRM_SUCCESS_JSON = `{
   }
 }`;
 
-/** 退款 success — doc example shape; refundTransactionId is int64 too. */
+/** 退款 success — doc example shape; refundTransactionId is int64 too. Synthesized. */
 export const REFUND_SUCCESS_JSON = `{
   "returnCode": "0000",
   "returnMessage": "success",
   "info": {
-    "refundTransactionId": 2023042201206549311,
+    "refundTransactionId": 2026081402375151711,
     "refundTransactionDate": "2026-08-13T09:15:01Z"
   }
 }`;
 
-export const REFUND_TX_ID = "2023042201206549311";
+export const REFUND_TX_ID = "2026081402375151711";
 
 /**
  * 查詢付款明細 — a paid transaction, no refunds. Doc example shape
  * (retrieve-payment-details), amounts adjusted to be internally consistent.
+ * Synthesized.
  */
 export const DETAILS_PAID_JSON = `{
   "returnCode": "0000",
@@ -87,7 +92,7 @@ export const DETAILS_PAID_JSON = `{
   ]
 }`;
 
-/** Same transaction after a partial refund (refundAmount recorded negative). */
+/** Same transaction after a partial refund (refundAmount recorded negative). Synthesized. */
 export const DETAILS_PARTIAL_REFUND_JSON = `{
   "returnCode": "0000",
   "returnMessage": "success",
@@ -114,9 +119,21 @@ export const DETAILS_PARTIAL_REFUND_JSON = `{
   ]
 }`;
 
-/** An empty details result — the gateway can answer 0000 with no entries. */
+/**
+ * An empty details result. NOT observed live (unknown ids answer 1150, see
+ * {@link DETAILS_NOT_FOUND_JSON}) — kept because the adapter defends against
+ * a 0000-with-no-entries answer anyway.
+ */
 export const DETAILS_EMPTY_JSON = `{
   "returnCode": "0000",
   "returnMessage": "success",
   "info": []
 }`;
+
+/**
+ * Path-variable overflow — recorded live 2026-08-13 by refunding
+ * transactionId "9"×19: the gateway parses path ids as SIGNED INT64, and
+ * anything past 2^63-1 fails parameter validation before lookup, with the
+ * detail in `errorDetailMap` (a field the result-code table never mentions).
+ */
+export const REFUND_OVERFLOW_2101_JSON = `{"returnCode":"2101","returnMessage":"Parameter error.","errorDetailMap":{"unrecognizedPathVariable":"transactionId","requiredType":"Number","cause":"For input string: \\"9999999999999999999\\""}}`;

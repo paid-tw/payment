@@ -16,10 +16,13 @@ import {
   voidUrl,
 } from "./server.js";
 import {
+  CHECK_PENDING_JSON,
   CONFIRM_SUCCESS_JSON,
   DETAILS_EMPTY_JSON,
+  DETAILS_NOT_FOUND_JSON,
   DETAILS_PAID_JSON,
   DETAILS_PARTIAL_REFUND_JSON,
+  REFUND_OVERFLOW_2101_JSON,
   REFUND_SUCCESS_JSON,
   REFUND_TX_ID,
   REQUEST_SUCCESS_JSON,
@@ -101,7 +104,7 @@ describe("createPayment (付款請求)", () => {
     expect(result.transactionId).toBe(TX_ID);
     expect(result.transactionId).not.toBe(TX_ID_ROUNDED);
     expect(result.paymentUrl.web).toContain("sandbox-web-pay.line.me");
-    expect(result.paymentAccessToken).toBe("056579816895");
+    expect(result.paymentAccessToken).toBe("179097132890");
   });
 
   it("passes explicit packages/options through and books the confirmUrl override", async () => {
@@ -264,7 +267,9 @@ describe("getPayment (查詢付款明細)", () => {
     server.use(http.get(DETAILS_URL, () => json(DETAILS_EMPTY_JSON)));
     await expectPaymentError(testProvider().getPayment({ tradeNo: TX_ID }), "NOT_FOUND");
 
-    server.use(http.get(DETAILS_URL, () => HttpResponse.json(gatewayError("1150"))));
+    // The answer the sandbox actually gives for unknown ids AND for
+    // transactions that exist but were never confirmed (recorded 2026-08-13).
+    server.use(http.get(DETAILS_URL, () => json(DETAILS_NOT_FOUND_JSON)));
     await expectPaymentError(testProvider().getPayment({ tradeNo: TX_ID }), "NOT_FOUND", "1150");
   });
 
@@ -332,9 +337,28 @@ describe("refundPayment (退款)", () => {
     );
   });
 
+  it("maps a parameter error (2101) onto VALIDATION, errorDetailMap kept in raw", async () => {
+    server.use(http.post(refundUrl(TX_ID), () => json(REFUND_OVERFLOW_2101_JSON)));
+    const err = await expectPaymentError(
+      testProvider().refundPayment({ orderId: "x", tradeNo: TX_ID, amount: 40 }),
+      "VALIDATION",
+      "2101",
+    );
+    expect((err.raw as Record<string, unknown>).errorDetailMap).toMatchObject({
+      unrecognizedPathVariable: "transactionId",
+    });
+  });
+
   it("requires orderId or tradeNo", async () => {
     await expectPaymentError(
       testProvider().refundPayment({} as unknown as LinepayRefundInput),
+      "VALIDATION",
+    );
+  });
+
+  it("rejects a path id past int64 locally (the gateway would 2101 it)", async () => {
+    await expectPaymentError(
+      testProvider().refundPayment({ orderId: "x", tradeNo: "9".repeat(19), amount: 40 }),
       "VALIDATION",
     );
   });
@@ -377,13 +401,20 @@ describe("confirmPayment (付款授權)", () => {
     );
   });
 
-  it("maps confirming a non-authorized transaction (1150) onto NOT_FOUND", async () => {
-    server.use(http.post(confirmUrl(TX_ID), () => HttpResponse.json(gatewayError("1150"))));
-    await expectPaymentError(
-      testProvider().confirmPayment({ transactionId: TX_ID, amount: 100, currency: "TWD" }),
-      "NOT_FOUND",
-      "1150",
+  it("maps confirming before the buyer authenticated (1169) — recorded live", async () => {
+    server.use(
+      http.post(confirmUrl(TX_ID), () =>
+        HttpResponse.json(
+          gatewayError("1169", "Payment method and password must be certificated by LINE Pay."),
+        ),
+      ),
     );
+    const err = await expectPaymentError(
+      testProvider().confirmPayment({ transactionId: TX_ID, amount: 100, currency: "TWD" }),
+      "PROVIDER",
+      "1169",
+    );
+    expect(err.message).toContain("驗證認證密碼");
   });
 });
 
@@ -441,7 +472,10 @@ describe("checkPaymentRequestStatus (查詢付款請求狀態)", () => {
     server.use(
       http.get(checkUrl(TX_ID), async ({ request }) => {
         seen = await inspectSignedRequest(request);
-        return HttpResponse.json({ returnCode, returnMessage: "" });
+        // 0000 = the shape recorded live 2026-08-13 ("reserved transaction.").
+        return returnCode === "0000"
+          ? json(CHECK_PENDING_JSON)
+          : HttpResponse.json({ returnCode, returnMessage: "" });
       }),
     );
     const result = await testProvider().checkPaymentRequestStatus({ transactionId: TX_ID });

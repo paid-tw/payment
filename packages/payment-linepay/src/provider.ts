@@ -310,6 +310,8 @@ export function createLinepayProvider(config: LinepayProviderConfig): LinepayPro
           });
         }
       }
+      // The id lands in the URL path — validate even the gateway-resolved one.
+      assertTransactionId(transactionId, "refund");
       const info = assertGatewayOk(
         await callApi(
           "POST",
@@ -575,12 +577,24 @@ function assertAmount(amount: number, currency: string, field: string): number {
   return amount;
 }
 
+/** transactionId is a signed int64 on the gateway side (recorded 2026-08-13:
+ * an all-9s 19-digit path id fails with 2101 `unrecognizedPathVariable`
+ * before lookup). */
+const INT64_MAX = 9223372036854775807n;
+
 /** Ids are int64 strings; a lost-precision number would target the wrong payment. */
 function assertTransactionId(value: string, label: string): string {
   if (typeof value !== "string" || !/^\d{1,19}$/.test(value)) {
     throw new PaymentError(
       "VALIDATION",
       `LINE Pay ${label} 需要字串型別的 transactionId（int64 超出 JS number 精度，收到 ${JSON.stringify(value)}）`,
+      "linepay",
+    );
+  }
+  if (BigInt(value) > INT64_MAX) {
+    throw new PaymentError(
+      "VALIDATION",
+      `LINE Pay ${label} transactionId 超出 int64 範圍（收到 "${value}"）`,
       "linepay",
     );
   }
