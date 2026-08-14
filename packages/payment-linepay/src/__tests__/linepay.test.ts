@@ -276,6 +276,13 @@ describe("getPayment (查詢付款明細)", () => {
   it("requires one of tradeNo/merTradeNo", async () => {
     await expectPaymentError(testProvider().getPayment({}), "VALIDATION");
   });
+
+  it("rejects a number tradeNo — precision was already lost upstream", async () => {
+    await expectPaymentError(
+      testProvider().getPayment({ tradeNo: Number(TX_ID) as unknown as string }),
+      "VALIDATION",
+    );
+  });
 });
 
 describe("refundPayment (退款)", () => {

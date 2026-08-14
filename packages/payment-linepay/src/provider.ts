@@ -409,6 +409,9 @@ export function createLinepayProvider(config: LinepayProviderConfig): LinepayPro
         "linepay",
       );
     }
+    // A number-typed id was already rounded upstream — it would silently
+    // query a DIFFERENT transaction, so gate it like every other entrypoint.
+    if (input.tradeNo) assertTransactionId(input.tradeNo, "details");
     const query = new URLSearchParams();
     if (input.tradeNo) query.append("transactionId", input.tradeNo);
     if (input.merTradeNo) query.append("orderId", input.merTradeNo);
