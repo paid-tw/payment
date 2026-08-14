@@ -1,6 +1,6 @@
 {
   "name": "@paid-tw/payment-linepay",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "description": "LINE Pay adapter for @paid-tw/payment — Online API v4: request/confirm checkout, capture/void, refund, payment details, and request-status polling.",
   "keywords": [
     "line-pay",
