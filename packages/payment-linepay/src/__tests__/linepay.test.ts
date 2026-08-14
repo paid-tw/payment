@@ -393,7 +393,7 @@ describe("confirmPayment (付款授權)", () => {
   it("rejects a number transactionId — precision was already lost upstream", async () => {
     await expectPaymentError(
       testProvider().confirmPayment({
-        transactionId: 2023042201206549310 as unknown as string,
+        transactionId: Number(TX_ID) as unknown as string,
         amount: 100,
         currency: "TWD",
       }),

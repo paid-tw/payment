@@ -441,18 +441,20 @@ export function createLinepayProvider(config: LinepayProviderConfig): LinepayPro
       method === "POST" ? JSON.stringify(payload.body ?? {}) : (payload.query?.toString() ?? "");
     const url = `${origin}${apiPath}${method === "GET" && message ? `?${message}` : ""}`;
 
+    const init: RequestInit = {
+      method,
+      headers: {
+        "Content-Type": "application/json",
+        "X-LINE-ChannelId": channelId,
+        "X-LINE-Authorization-Nonce": nonce,
+        "X-LINE-Authorization": signLinepayRequest(channelSecret, apiPath, message, nonce),
+      },
+    };
+    if (method === "POST") init.body = message;
+
     let response: Response;
     try {
-      response = await fetch(url, {
-        method,
-        headers: {
-          "Content-Type": "application/json",
-          "X-LINE-ChannelId": channelId,
-          "X-LINE-Authorization-Nonce": nonce,
-          "X-LINE-Authorization": signLinepayRequest(channelSecret, apiPath, message, nonce),
-        },
-        body: method === "POST" ? message : undefined,
-      });
+      response = await fetch(url, init);
     } catch (err) {
       throw new PaymentError("NETWORK", `LINE Pay ${label} 連線失敗`, "linepay", { cause: err });
     }
